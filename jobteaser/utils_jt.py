@@ -8,9 +8,35 @@ import time
 import json
 import os
 from urllib.parse import urljoin
+from urllib.parse import urlencode, quote_plus
+from datetime import datetime
 
 
-JOBTEASER_URL = "https://www.jobteaser.com/fr/job-offers"
+BASE_SEARCH_URL = "https://www.jobteaser.com/fr/job-offers"
+DATA_KEYWORDS = [
+    "data",
+    "engineer",
+    "scientist",
+    "analytics",
+    "analyst",
+    "machine learning",
+    "ml",
+    "ai",
+    "business intelligence",
+    "bi",
+]
+
+FRANCE_LOCATION_PARAMS = {
+    "lat": "46.711046499999995",
+    "lng": "2.1811786692949857",
+    "localized_location": "France",
+    "location": "France::_Y291bnRyeTo6OnVGaW9mQWV3VEVWbzlSc056bVZmZU5jOEFyTT0=",
+}
+
+
+def is_relevant_title(title):
+    title = title.lower()
+    return any(keyword in title for keyword in DATA_KEYWORDS)
 
 
 def create_driver(headless=False):
@@ -195,55 +221,137 @@ def save_to_json(data, filename):
     print(f"\n💾 JSON sauvegardé : {path}")
 
 
+def get_run_timestamp():
+    return datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+
+
+def save_results_and_stats(results, stats):
+    os.makedirs("json_scrapped", exist_ok=True)
+    ts = get_run_timestamp()
+
+    results_path = f"json_scrapped/jobs_{ts}.json"
+    stats_path = f"json_scrapped/stats_{ts}.json"
+
+    with open(results_path, "w", encoding="utf-8") as f:
+        json.dump(results, f, ensure_ascii=False, indent=2)
+
+    with open(stats_path, "w", encoding="utf-8") as f:
+        json.dump(stats, f, ensure_ascii=False, indent=2)
+
+    print(f"\n💾 Résultats sauvegardés : {results_path}")
+    print(f"📊 Statistiques sauvegardées : {stats_path}")
+
+
+def build_search_url(query, page):
+    params = {
+        **FRANCE_LOCATION_PARAMS,
+        "q": query,
+        "page": page,
+    }
+    return f"{BASE_SEARCH_URL}?{urlencode(params)}"
+
+
 def main():
     driver = create_driver(headless=False)
 
+    SEARCH_QUERIES = [
+        "data analyst",
+        "data engineer",
+        "data scientist",
+        "data science",
+        "intelligence artificielle",
+        "machine learning",
+        "consultant data",
+        "big data",
+    ]
+
     results = []
     failed_jobs = []
-    MAX_PAGES = 3
+    MAX_PAGES = 5
     MAX_PER_PAGE = 2
     seen_ids = set()
 
     print("🌍 Démarrage du scraping JobTeaser")
 
-    for page in range(1, MAX_PAGES + 1):
-        print(f"\n📄 PAGE {page}")
-        page_url = f"{JOBTEASER_URL}?page={page}"
-        driver.get(page_url)
-        handle_cloudflare(driver)
-        accept_cookies(driver)
+    stats = {}
+    for query in SEARCH_QUERIES:
+        print(f"\n🔎 Recherche : {query}")
+        stats[query] = {
+            "seen": 0,
+            "kept": 0,
+            "duplicates": 0,
+            "failed": 0,
+            "filtered": 0,
+        }
 
-        WebDriverWait(driver, 10).until(
-            EC.presence_of_element_located(
-                (By.CSS_SELECTOR, "[data-testid='jobad-card']")
+        for page in range(1, MAX_PAGES + 1):
+            print(f"\n📄 PAGE {page} — requête '{query}'")
+
+            page_url = build_search_url(query, page)
+            driver.get(page_url)
+            handle_cloudflare(driver)
+            accept_cookies(driver)
+
+            WebDriverWait(driver, 10).until(
+                EC.presence_of_element_located(
+                    (By.CSS_SELECTOR, "[data-testid='jobad-card']")
+                )
             )
+
+            cards = get_job_cards(driver)
+            print(f"→ {len(cards)} offres détectées")
+
+            for card in cards[:MAX_PER_PAGE]:
+                job = extract_job_preview(card, driver)
+                stats[query]["seen"] += 1
+
+                if job is None:
+                    print("  ⚠️ Carte ignorée (stale element)")
+                    continue
+
+                if job["id"] in seen_ids:
+                    print("  ↩️ Offre déjà vue, ignorée")
+                    stats[query]["duplicates"] += 1
+                    continue
+
+                seen_ids.add(job["id"])
+
+                # 🔎 Filtrage métier (AVANT page détail)
+                if not is_relevant_title(job["title"]):
+                    stats[query]["filtered"] += 1
+                    print("  🚫 Offre hors périmètre data")
+                    continue
+
+                print(f"  • {job['title']}")
+
+                job = enrich_with_detail(driver, job)
+
+                if job["description"] is None:
+                    failed_jobs.append(job["url"])
+                    stats[query]["failed"] += 1
+                else:
+                    results.append(job)
+                    stats[query]["kept"] += 1
+
+    print("\n📊 STATISTIQUES PAR REQUÊTE")
+    for query, s in stats.items():
+        seen = s["seen"]
+        kept = s["kept"]
+        duplicates = s["duplicates"]
+        pertinence = (kept / seen * 100) if seen else 0
+        redondance = (duplicates / seen * 100) if seen else 0
+        print(
+            f"- {query:30} | "
+            f"vus: {seen:3} | "
+            f"retenus: {kept:3} | "
+            f"pertinence: {pertinence:5.1f}% | "
+            f"redondance: {redondance:5.1f}%"
         )
-
-        cards = get_job_cards(driver)
-        print(f"→ {len(cards)} offres détectées")
-
-        for card in cards[:MAX_PER_PAGE]:
-            job = extract_job_preview(card, driver)
-            if job is None:
-                print("  ⚠️ Carte ignorée (stale element)")
-                continue
-            if job["id"] in seen_ids:
-                print("  ↩️ Offre déjà vue, ignorée")
-                continue
-            seen_ids.add(job["id"])
-
-            print(f"  • {job['title']}")
-
-            job = enrich_with_detail(driver, job)
-            if job["description"] is None:
-                failed_jobs.append(job["url"])
-            else:
-                results.append(job)
-
-    save_to_json(results, "resultats_test.json")
+    save_results_and_stats(results, stats)
 
     print(f"\n✅ Scraping terminé : {len(results)} offres collectées")
-    print(f"\n❌ Offres échouées : {len(failed_jobs)}")
+    print(f"❌ Offres échouées : {len(failed_jobs)}")
+
     input("\nAppuie sur ENTER pour fermer le navigateur...")
     driver.quit()
 
