@@ -1,6 +1,16 @@
-requests==2.31.0
-beautifulsoup4==4.12.3
-pymongo==4.6.1
-python-dotenv==1.0.0
-lxml==5.1.0
-certifi==2023.11.17
+# Selenium for web automation
+selenium>=4.15.0
+#
+setuptools>=65.0.0
+# Automatic ChromeDriver management (fallback)
+webdriver-manager>=4.0.1
+# MongoDB driver
+pymongo>=4.6.0
+
+# SSL certificates for MongoDB Atlas
+certifi>=2023.11.17
+
+# Environment variables
+python-dotenv>=1.0.0
+
+
