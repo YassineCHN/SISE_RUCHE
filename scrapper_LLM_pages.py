@@ -90,6 +90,7 @@ Texte de l'offre:
 
 Réponds UNIQUEMENT avec un objet JSON valide contenant ces champs (rien d'autre, pas de markdown):
 {{
+  "ID": "numéro de référence de l'annonce"
   "titre": "titre du poste",
   "collectivite": "nom de l'employeur/organisme",
   "departement": "département",
@@ -230,4 +231,5 @@ if __name__ == "__main__":
         scraper.save_to_csv()
         print(f"\n✅ Terminé ! Total : {len(scraper.all_jobs)} offres.")
     except Exception as e:
+
         print(f"❌ Erreur critique : {e}")
