@@ -1,0 +1,23 @@
+[
+  {
+    "workers": 1,
+    "pages": 20,
+    "total_time": 787.2475117002614,
+    "time_per_page": 39.36237558501307,
+    "pages_per_second": 0.025404970740148684
+  },
+  {
+    "workers": 2,
+    "pages": 18,
+    "total_time": 348.4693979001604,
+    "time_per_page": 19.359410994453356,
+    "pages_per_second": 0.05165446408914553
+  },
+  {
+    "workers": 4,
+    "pages": 13,
+    "total_time": 155.58244060026482,
+    "time_per_page": 11.967880046174217,
+    "pages_per_second": 0.08355698721426197
+  }
+]
