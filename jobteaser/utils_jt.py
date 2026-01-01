@@ -282,6 +282,11 @@ def extract_offer_detail(driver, url, keyword=None):
     """
     Scrape une page détail JobTeaser et retourne un dict brut.
     """
+    job_id = None
+    try:
+        job_id = url.split("/job-offers/")[1].split("-")[0]
+    except Exception:
+        pass
     driver.get(url)
     handle_cloudflare(driver)
 
@@ -313,6 +318,7 @@ def extract_offer_detail(driver, url, keyword=None):
             return None
 
     return {
+        "id": job_id,
         "source": "jobteaser",
         "url": url,
         "search_keyword": keyword,
