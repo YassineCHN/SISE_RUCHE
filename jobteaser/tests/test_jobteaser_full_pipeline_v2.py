@@ -13,7 +13,7 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 
-from utils_jt import (
+from jobteaser.archives.utils_jt import (
     create_driver,
     handle_cloudflare,
     build_search_url,
@@ -23,7 +23,7 @@ from utils_jt import (
     extract_offer_detail,
 )
 
-from nlp_jobteaser import enrich_offers_jobteaser
+from jobteaser.archives.nlp_jobteaser import enrich_offers_jobteaser
 
 
 # =====================
