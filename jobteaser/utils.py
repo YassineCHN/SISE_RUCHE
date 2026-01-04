@@ -26,8 +26,11 @@ DATA_KEYWORDS = [
     "analytics",
     "analyst",
     "machine learning",
+    "intelligence artificielle",
     "ml",
     "ai",
+    "ia",
+    "deep learning",
     "business intelligence",
     "bi",
 ]
@@ -105,11 +108,15 @@ def get_non_empty_text(element, driver, timeout=5):
     return element.get_attribute("innerText").strip()
 
 
-def build_search_url(query: str, page: int = 1, sort: str = "recency") -> str:
+def build_search_url(query: str, page: int = 1, sort: str | None = None) -> str:
     params = dict(FRANCE_LOCATION_PARAMS)
     params["q"] = query
-    params["sort"] = sort
     params["page"] = str(page)
+
+    # Si sort=None → tri par défaut (pertinence)
+    if sort:
+        params["sort"] = sort
+
     return f"{BASE_SEARCH_URL}?{urlencode(params)}"
 
 

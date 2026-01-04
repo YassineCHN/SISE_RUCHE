@@ -43,6 +43,7 @@ def run_scraper():
 
             page = 1
             while True:
+                # garde-fous globaux
                 if total_detail_opened >= config.MAX_DETAIL_PAGES_TOTAL:
                     break
                 if stats[query]["detail_opened"] >= config.MAX_DETAIL_PAGES_PER_KEYWORD:
@@ -50,7 +51,8 @@ def run_scraper():
                 if page > getattr(config, "MAX_LIST_PAGES_PER_KEYWORD", 20):
                     break
 
-                driver.get(build_search_url(query, page=page, sort="recency"))
+                # 1️⃣ PAGE LISTE
+                driver.get(build_search_url(query, page=page))
                 handle_cloudflare(driver)
 
                 if not cookies_done:
@@ -60,6 +62,9 @@ def run_scraper():
                 cards = get_job_cards(driver)
                 if not cards:
                     break
+
+                # 2️⃣ COLLECTE DES URLS DÉTAIL ÉLIGIBLES
+                detail_queue = []
 
                 for card in cards:
                     stats[query]["cards_seen"] += 1
@@ -73,7 +78,7 @@ def run_scraper():
                         stats[query]["duplicates"] += 1
                         continue
 
-                    # age (None => offres de la semaine)
+                    # âge (None => "offres de la semaine")
                     age_days = get_card_age_days(card, driver)
                     if age_days is None:
                         if config.IGNORE_UNKNOWN_TIME:
@@ -89,20 +94,12 @@ def run_scraper():
                         stats[query]["filtered_title"] += 1
                         continue
 
-                    # on décide d'ouvrir le détail
+                    # ✔️ éligible → on empile l'URL (SANS naviguer)
                     seen_ids.add(job["id"])
-                    stats[query]["detail_opened"] += 1
-                    total_detail_opened += 1
+                    detail_queue.append(job["url"])
 
-                    offer = extract_offer_detail(driver, job["url"], keyword=query)
-
-                    if offer.get("description_raw"):
-                        results.append(offer)
-                        stats[query]["kept"] += 1
-                    else:
-                        failed.append(job["url"])
-                        stats[query]["failed"] += 1
-
+                # 3️⃣ OUVERTURE DES PAGES DÉTAIL (APRÈS LA LISTE)
+                for url in detail_queue:
                     if total_detail_opened >= config.MAX_DETAIL_PAGES_TOTAL:
                         break
                     if (
@@ -110,6 +107,18 @@ def run_scraper():
                         >= config.MAX_DETAIL_PAGES_PER_KEYWORD
                     ):
                         break
+
+                    stats[query]["detail_opened"] += 1
+                    total_detail_opened += 1
+
+                    offer = extract_offer_detail(driver, url, keyword=query)
+
+                    if offer.get("description_raw"):
+                        results.append(offer)
+                        stats[query]["kept"] += 1
+                    else:
+                        failed.append(url)
+                        stats[query]["failed"] += 1
 
                 page += 1
 
