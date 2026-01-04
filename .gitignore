@@ -1,0 +1,33 @@
+# ======================
+# ENV / SECRETS
+# ======================
+.env
+
+# ======================
+# VIRTUAL ENVIRONMENTS
+# ======================
+.venv/
+venv/
+env/
+
+# ======================
+# PYTHON CACHE
+# ======================
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# ======================
+# jobteaser
+# ======================
+jobteaser/tests/
+jobteaser/archives/
+
+# ======================
+# OS / IDE
+# ======================
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
