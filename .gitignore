@@ -6,9 +6,9 @@
 # ======================
 # VIRTUAL ENVIRONMENTS
 # ======================
-.venv/
-venv/
-env/
+scrapers/.venv/
+scrapers/venv/
+scrapers/env/
 
 # ======================
 # PYTHON CACHE
@@ -21,8 +21,8 @@ __pycache__/
 # ======================
 # jobteaser
 # ======================
-jobteaser/tests/
-jobteaser/archives/
+scrapers/jobteaser/tests/
+scrapers/jobteaser/archives/
 
 # ======================
 # OS / IDE
