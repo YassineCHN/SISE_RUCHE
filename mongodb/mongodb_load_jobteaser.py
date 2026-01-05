@@ -1,7 +1,7 @@
 import json
-from mongodb_utils import get_collection, create_unique_index, bulk_upsert
+from mongodb.mongodb_utils import get_collection, create_unique_index, bulk_upsert
 
-JSON_FILE = "jobteaser/output/jobteaser_enriched_20260104_170404.json"
+JSON_FILE = "scrapers/jobteaser/output/jobteaser_enriched_20260104_170404.json"
 COLLECTION_NAME = "jobteaser_raw"
 
 

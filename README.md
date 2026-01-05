@@ -25,7 +25,7 @@ FT_CLIENT_SECRET=your_ft_client_secret
 
 3. **Test MongoDB connection:**
 ```bash
-python mongodb_utils.py
+python mongodb.mongodb_utils.py
 ```
 
 ## Usage
@@ -37,7 +37,7 @@ python scraper_francetravail.py
 
 ### Create Your Own Scraper
 ```python
-from mongodb_utils import get_collection, create_unique_index, bulk_upsert
+from mongodb.mongodb_utils import get_collection, create_unique_index, bulk_upsert
 
 # 1. Define your collection name
 COLLECTION_NAME = "apec_raw"
@@ -84,7 +84,7 @@ bulk_upsert(collection, documents)
 
 ## Example: APEC Scraper Template
 ```python
-from mongodb_utils import get_collection, bulk_upsert
+from mongodb.mongodb_utils import get_collection, bulk_upsert
 from dataclasses import dataclass, asdict
 
 COLLECTION_NAME = "apec_raw"

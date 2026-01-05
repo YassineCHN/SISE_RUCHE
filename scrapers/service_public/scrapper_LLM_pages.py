@@ -20,7 +20,7 @@ from bs4 import BeautifulSoup
 from dotenv import load_dotenv
 
 # Import MongoDB utilities
-from mongodb_utils import (
+from mongodb.mongodb_utils import (
     get_collection,
     create_unique_index,
     bulk_upsert,
