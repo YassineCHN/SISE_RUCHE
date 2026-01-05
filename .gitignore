@@ -1,2 +1,4 @@
 .env
 env_romain_ruche/
+.dependancy_ProjetNLP
+__pycache__/
