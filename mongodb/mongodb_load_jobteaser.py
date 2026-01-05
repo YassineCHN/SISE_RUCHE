@@ -1,11 +1,16 @@
+from pathlib import Path
 import json
 from mongodb.mongodb_utils import get_collection, create_unique_index, bulk_upsert
 
-JSON_FILE = "scrapers/jobteaser/output/jobteaser_enriched_20260104_170404.json"
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+
+JSON_FILE = (
+    PROJECT_ROOT / "scrapers/jobteaser/output/jobteaser_enriched_20260104_170404.json"
+)
 COLLECTION_NAME = "jobteaser_raw"
 
 
-def load_enriched_jobteaser(path: str):
+def load_enriched_jobteaser(path: Path):
     with open(path, "r", encoding="utf-8") as f:
         data = json.load(f)
 
