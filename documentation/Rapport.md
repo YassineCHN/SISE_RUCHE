@@ -15,9 +15,34 @@ Enfin, une dernière section synthétise les principaux résultats obtenus, tant
 
 
 ##Résumé##
- Reprise des principaux éléments du projet 
+Le projet détaillé dans le présent rapport est développé dans le cadre du cours "NLP-Text Mining" dispensé par Ricco RAKOTOMALALA.
 
- ##Section 1 : Corpus documentaire
+
+ ##Section 1 : Corpus documentaire, Datalake sous MongoDB##
+   - quatre méthodes de scraping, pour 4 sources distinctes
+   - alimentation d'un datalake, rendu nécessaire par les sources distinctes
+
+ ##Section 2 : Entrepôt de données, sous MotherDuck ##
+  - uniformisation des variables de chaque collection du datalake
+  - Choix de technologie MotherDuck, issu de DuckDB
+  - architecture de l'entrepôt
+  - script d'alimentation
+
+ ##Section 3 : Application Streamlit##
+  - rappel des contraintes imposées de l'application
+  - architecture de l'application
+  - choix des analyses
+  - structuration et fonctionnalités de la partie cartographique
+
+##Conclusions##
+ - conclusions techniques  : parallélisation, choix de technologies...
+ - conclusions fonctionnelles : localisation et statistiques des KPI
+
+##Annexes##
+
+##Références##
+ 
+
  
 
  
