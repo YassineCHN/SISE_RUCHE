@@ -42,9 +42,14 @@ from sklearn.metrics.pairwise import cosine_similarity
 from scipy.sparse import csr_matrix
 from tfidf_ml_data_filter import filter_data_jobs_ml 
 
+# *** NOUVEAU : Geolocation enrichment ***
+from geolocation_enrichment import enrich_locations_with_coordinates
+
 # Configuration
 warnings.filterwarnings('ignore')
 load_dotenv()
+
+
 
 # ============================================================================
 # GLOBAL CONFIGURATION
@@ -966,16 +971,20 @@ def populate_dimension_tables(df: pd.DataFrame, con: duckdb.DuckDBPyConnection) 
             'ville': row.location,
             'code_postal': dept[:2] if len(dept) >= 2 else dept,
             'departement': dept,
-            'latitude': None,  # Could be enriched with geocoding
-            'longitude': None,
+            'latitude': None,  # Will be enriched 
+            'longitude': None, # Will be enriched
             'id_region': id_region
         })
     
     df_locations = pd.DataFrame(location_data)
+    # *** (Milena) Nouveau : Enrichir avec lat/lon via API géocodage ***
+    df_locations = enrich_locations_with_coordinates(df_locations)
+
     con.execute("DELETE FROM d_localisation")
     con.execute("INSERT INTO d_localisation SELECT * FROM df_locations")
     
-    print("  Inserted {} locations".format(len(df_locations)))
+    enriched = df_locations['latitude'].notna().sum()
+    print("  Inserted {} locations".format(len(df_locations), enriched))
     
     # ========================================================================
     # D_Date: Generate date dimension for relevant date range
