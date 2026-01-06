@@ -1,0 +1,17 @@
+[theme]
+base = "dark"
+primaryColor = "#03030215"
+backgroundColor = "#b4840046"
+secondaryBackgroundColor = "#ebb750ff"
+textColor = "#1d0d3a8e"
+font = "sans serif"
+baseRadius="1rem"
+buttonRadius="3rem"
+borderColor="#3621058e"
+# showWidgetBorder = 
+# showSidebarBorder =
+
+
+[server]
+runOnSave= true
+enableStaticServing = true
