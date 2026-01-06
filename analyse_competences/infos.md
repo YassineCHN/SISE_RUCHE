@@ -1,7 +1,9 @@
-#Dépendances
+# Dépendances
+
 pip install duckdb sentence-transformers umap-learn hdbscan pandas numpy scikit-learn
 
-#Structure
+# Structure
+
 ml_pipeline/
 ├── config.py
 ├── extract.py
