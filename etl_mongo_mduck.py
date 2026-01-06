@@ -35,7 +35,10 @@ import pymongo
 from pymongo import MongoClient
 
 # MotherDuck
-import duckdb  
+import duckdb
+    # import Mduckdb name
+from config import MOTHERDUCK_DATABASE
+
 
 # NLP & ML
 from sklearn.feature_extraction.text import TfidfVectorizer
@@ -64,7 +67,7 @@ DATABASE_NAME = "RUCHE_datalake"
 
 # Configuration MotherDuck
 MOTHERDUCK_TOKEN = os.getenv('MOTHERDUCK_TOKEN')
-MOTHERDUCK_DATABASE = "job_market_RUCHE"
+    # MOTHERDUCK_DATABASE in config.py
 
 # Collections to process
 COLLECTIONS = [
