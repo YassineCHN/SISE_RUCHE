@@ -1,290 +1,200 @@
 """
-MotherDuck Backup Script - Cold Storage
-========================================
-Script de sauvegarde pour télécharger une base MotherDuck vers un fichier local DuckDB.
+MotherDuck Cold Storage Backup
+==============================
 
-Usage:
-    python backup_motherduck.py
+Script d'exportation de base de données MotherDuck vers un fichier DuckDB local.
+Ce script est conçu pour être exécuté de manière autonome ou planifiée via un scheduler.
 
-Requirements:
-    - duckdb
-    - python-dotenv (optionnel)
-    
-Environment Variables:
-    MOTHERDUCK_TOKEN: Token d'authentification MotherDuck
+Author: Data Engineering Team
 """
 
 import os
+import sys
 import duckdb
-# MotherDuck
-    # import db name
-from config import MOTHERDUCK_DATABASE
-from dotenv import load_dotenv
-load_dotenv()
 from datetime import datetime
 from pathlib import Path
-from typing import List, Tuple
+from typing import List, Optional
+from dotenv import load_dotenv
+
+# Chargement des variables d'environnement
+load_dotenv()
+
+# Configuration par défaut si non présente dans un fichier config.py
+try:
+    from config import MOTHERDUCK_DATABASE
+except ImportError:
+    MOTHERDUCK_DATABASE = "job_market_RUCHE"
 
 
 class MotherDuckBackup:
-    """Classe pour gérer le backup MotherDuck vers fichier local"""
-    
-    def __init__(self, motherduck_db: str, local_backup_path: str, token: str = None):
+    """
+    Gère le cycle de vie de la sauvegarde : connexion, extraction, copie et validation.
+    """
+
+    def __init__(self, motherduck_db: str, local_backup_path: str, token: Optional[str] = None, exclude_tables: Optional[List[str]] = None):
         """
-        Initialise le backup manager
-        
+        Initialise les paramètres de sauvegarde.
+
         Args:
-            motherduck_db: Nom de la base MotherDuck (ex: "job_market_analytics")
-            local_backup_path: Chemin du fichier de backup local (ex: "data/backup_job_market.duckdb")
-            token: Token MotherDuck (si None, utilise MOTHERDUCK_TOKEN env var)
+            motherduck_db: Nom de la base source sur MotherDuck.
+            local_backup_path: Chemin du fichier de destination (.duckdb).
+            token: Jeton d'authentification (si None, utilise la variable d'env MOTHERDUCK_TOKEN).
+            exclude_tables: Liste des tables à ignorer lors du backup.
         """
         self.motherduck_db = motherduck_db
         self.local_backup_path = Path(local_backup_path)
-        self.token = os.getenv('MOTHERDUCK_TOKEN')
-        
-        if not self.token:
-            raise ValueError("MOTHERDUCK_TOKEN not found in environment variables")
-        
-        # Créer le répertoire parent si nécessaire
-        self.local_backup_path.parent.mkdir(parents=True, exist_ok=True)
-        
+        self.token = token or os.getenv('MOTHERDUCK_TOKEN')
+        # Tables à exclure (par défaut ou liste fournie)
+        self.exclude_tables = exclude_tables if exclude_tables is not None else ['job_offers_cleaned']
         self.con = None
-    
-    def _connect(self) -> duckdb.DuckDBPyConnection:
-        """Établit la connexion à MotherDuck"""
-        print("=" * 80)
-        print("MOTHERDUCK BACKUP - COLD STORAGE")
-        print("=" * 80)
-        print(f"\n[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Connexion à MotherDuck...")
+
+        if not self.token:
+            self._log("ERREUR: MOTHERDUCK_TOKEN manquant dans l'environnement.", level="ERROR")
+            sys.exit(1)
+
+    def _log(self, message: str, level: str = "INFO") -> None:
+        """
+        Affiche un message formaté avec timestamp.
+        Les erreurs sont dirigées vers stderr.
+        """
+        timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        formatted_message = f"[{timestamp}] [{level:<5}] {message}"
         
+        if level in ("ERROR", "CRITICAL"):
+            print(formatted_message, file=sys.stderr)
+        else:
+            print(formatted_message)
+
+    def _connect(self) -> None:
+        """Établit la connexion à l'instance distante."""
+        self._log(f"Connexion a MotherDuck (DB: {self.motherduck_db})...")
         try:
-            # Connexion à MotherDuck
             connection_string = f"md:{self.motherduck_db}?motherduck_token={self.token}"
             self.con = duckdb.connect(connection_string)
-            print(f"✅ Connecté à MotherDuck: {self.motherduck_db}")
-            return self.con
+            self._log("Connexion etablie.")
         except Exception as e:
-            print(f"❌ Erreur de connexion à MotherDuck: {e}")
+            self._log(f"Echec de connexion: {e}", level="ERROR")
             raise
-    
+
     def _get_tables(self) -> List[str]:
-        """Récupère la liste des tables dans la base MotherDuck"""
-        print(f"\n[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Détection des tables...")
-        
+        """Récupère la liste des tables éligibles au backup."""
+        self._log("Recuperation de la liste des tables...")
+        query = """
+            SELECT DISTINCT table_name 
+            FROM information_schema.tables 
+            WHERE table_schema = 'main' 
+            AND table_type = 'BASE TABLE'
+            ORDER BY table_name
+        """
         try:
-            # Requête pour lister les tables
-            query = """
-                SELECT table_name 
-                FROM information_schema.tables 
-                WHERE table_schema = 'main' 
-                AND table_type = 'BASE TABLE'
-                ORDER BY table_name
-            """
+            tables = [t[0] for t in self.con.execute(query).fetchall()]
             
-            tables = self.con.execute(query).fetchall()
-            table_names = [table[0] for table in tables]
+            # Filtrage des tables
+            tables_to_process = [t for t in tables if t not in self.exclude_tables]
+            excluded_count = len(tables) - len(tables_to_process)
             
-            print(f"✅ {len(table_names)} table(s) détectée(s):")
-            for table in table_names:
-                print(f"   • {table}")
-            
-            return table_names
+            self._log(f"Tables detectees: {len(tables)}. A traiter: {len(tables_to_process)}. Exclues: {excluded_count}.")
+            return tables_to_process
         except Exception as e:
-            print(f"❌ Erreur lors de la détection des tables: {e}")
+            self._log(f"Erreur lors du listing des tables: {e}", level="ERROR")
             raise
-    
-    def _get_table_count(self, table_name: str, db_alias: str = "main") -> int:
-        """Récupère le nombre de lignes d'une table"""
+
+    def _get_row_count(self, table_name: str, db_alias: str) -> int:
+        """Retourne le nombre de lignes d'une table spécifique."""
         try:
-            query = f"SELECT COUNT(*) FROM {db_alias}.{table_name}"
-            count = self.con.execute(query).fetchone()[0]
-            return count
-        except Exception as e:
-            print(f"⚠️  Impossible de compter les lignes de {table_name}: {e}")
+            return self.con.execute(f"SELECT COUNT(*) FROM {db_alias}.{table_name}").fetchone()[0]
+        except Exception:
             return -1
-    
-    def backup(self) -> Tuple[int, int, List[str]]:
+
+    def run_backup(self) -> bool:
         """
-        Exécute le backup complet
-        
-        Returns:
-            Tuple (nb_tables, total_rows, table_names)
+        Exécute la procédure complète de sauvegarde.
+        Returns: True si succès complet, False si erreurs rencontrées.
         """
         try:
-            # 1. Connexion à MotherDuck
+            # 1. Préparation du système de fichiers
+            if not self.local_backup_path.parent.exists():
+                self.local_backup_path.parent.mkdir(parents=True, exist_ok=True)
+
+            if self.local_backup_path.exists():
+                self._log(f"Suppression du fichier existant: {self.local_backup_path}")
+                self.local_backup_path.unlink()
+
+            # 2. Connexion et Attachement
             self._connect()
             
-            # 2. Détection des tables
+            self._log(f"Initialisation de la base locale: {self.local_backup_path}")
+            self.con.execute(f"ATTACH '{self.local_backup_path}' AS local_backup (TYPE DUCKDB)")
+
+            # 3. Traitement des tables
             tables = self._get_tables()
-            
             if not tables:
-                print("\n⚠️  Aucune table trouvée dans la base MotherDuck")
-                return 0, 0, []
-            
-            # 3. Attacher la base locale
-            print(f"\n[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Préparation de la base locale...")
-            print(f"   Fichier: {self.local_backup_path.absolute()}")
-            
-            # Supprimer l'ancien fichier de backup s'il existe
-            if self.local_backup_path.exists():
-                self.local_backup_path.unlink()
-                print(f"   ♻️  Ancien backup supprimé")
-            
-            # Attacher la base locale
-            attach_query = f"ATTACH '{self.local_backup_path}' AS local_backup (TYPE DUCKDB)"
-            self.con.execute(attach_query)
-            print(f"✅ Base locale attachée: local_backup")
-            
-            # 4. Copier chaque table
-            print(f"\n[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Copie des tables...")
-            print("-" * 80)
-            
+                self._log("Aucune table a sauvegarder.", level="WARNING")
+                return True
+
+            errors = 0
             total_rows = 0
-            backup_stats = []
-            
+
             for i, table in enumerate(tables, 1):
-                print(f"\n[{i}/{len(tables)}] Copie de la table: {table}")
+                self._log(f"Traitement [{i}/{len(tables)}] : {table}")
                 
-                # Compter les lignes source
-                source_count = self._get_table_count(table, "main")
-                print(f"   📊 Lignes dans MotherDuck: {source_count:,}")
-                
-                # Copier la table
                 try:
-                    copy_query = f"""
-                        CREATE OR REPLACE TABLE local_backup.{table} AS 
-                        SELECT * FROM main.{table}
-                    """
-                    self.con.execute(copy_query)
+                    # Copie des données (Create Table As Select)
+                    self.con.execute(f"CREATE OR REPLACE TABLE local_backup.{table} AS SELECT * FROM main.{table}")
                     
-                    # Vérifier la copie
-                    local_count = self._get_table_count(table, "local_backup")
-                    print(f"   💾 Lignes copiées localement: {local_count:,}")
+                    # Vérification simple (Row Count)
+                    count_src = self._get_row_count(table, "main")
+                    count_dst = self._get_row_count(table, "local_backup")
                     
-                    if source_count == local_count:
-                        print(f"   ✅ Copie réussie ({local_count:,} lignes)")
-                        backup_stats.append((table, local_count, "✅"))
-                        total_rows += local_count
+                    if count_src == count_dst:
+                        self._log(f"Succes copie {table} ({count_dst} lignes).")
+                        total_rows += count_dst
                     else:
-                        print(f"   ⚠️  Attention: Incohérence de comptage (Source: {source_count:,}, Local: {local_count:,})")
-                        backup_stats.append((table, local_count, "⚠️"))
-                        total_rows += local_count
+                        self._log(f"Disparite de donnees pour {table} (Source: {count_src} vs Local: {count_dst})", level="WARNING")
                         
                 except Exception as e:
-                    print(f"   ❌ Erreur lors de la copie: {e}")
-                    backup_stats.append((table, 0, "❌"))
-            
-            # 5. Détacher la base locale
-            print(f"\n[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Finalisation...")
+                    self._log(f"Erreur copie table {table}: {e}", level="ERROR")
+                    errors += 1
+
+            # 4. Finalisation
             self.con.execute("DETACH local_backup")
-            print(f"✅ Base locale détachée")
             
-            # 6. Résumé
-            print("\n" + "=" * 80)
-            print("RÉSUMÉ DU BACKUP")
-            print("=" * 80)
-            print(f"\n📅 Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-            print(f"☁️  Source: MotherDuck ({self.motherduck_db})")
-            print(f"💾 Destination: {self.local_backup_path.absolute()}")
-            print(f"\n📊 Statistiques:")
-            print(f"   • Tables copiées: {len([s for s in backup_stats if s[2] == '✅'])}/{len(tables)}")
-            print(f"   • Total lignes: {total_rows:,}")
-            print(f"   • Taille fichier: {self._get_file_size()}")
+            # Calcul de la taille finale
+            size_mb = self.local_backup_path.stat().st_size / (1024 * 1024)
             
-            print(f"\n📋 Détail par table:")
-            print("-" * 80)
-            print(f"{'Table':<30} {'Lignes':>15} {'Statut':>10}")
-            print("-" * 80)
-            for table_name, row_count, status in backup_stats:
-                print(f"{table_name:<30} {row_count:>15,} {status:>10}")
-            print("-" * 80)
+            self._log("-" * 60)
+            self._log(f"BACKUP TERMINE. Succes: {len(tables) - errors}/{len(tables)}. Lignes: {total_rows}. Taille: {size_mb:.2f} MB")
             
-            print("\n✅ Backup terminé avec succès!")
-            print("=" * 80)
-            
-            return len(tables), total_rows, [s[0] for s in backup_stats]
-            
+            return errors == 0
+
         except Exception as e:
-            print(f"\n❌ ERREUR CRITIQUE: {e}")
-            import traceback
-            traceback.print_exc()
-            raise
-        
+            self._log(f"Erreur critique du script: {e}", level="CRITICAL")
+            return False
         finally:
-            # Fermeture propre de la connexion
             if self.con:
                 try:
                     self.con.close()
-                    print(f"\n[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Connexion MotherDuck fermée")
-                except:
+                    self._log("Connexion MotherDuck fermee.")
+                except Exception:
                     pass
-    
-    def _get_file_size(self) -> str:
-        """Retourne la taille du fichier de backup formatée"""
-        if not self.local_backup_path.exists():
-            return "N/A"
-        
-        size_bytes = self.local_backup_path.stat().st_size
-        
-        # Conversion en unité lisible
-        for unit in ['B', 'KB', 'MB', 'GB']:
-            if size_bytes < 1024.0:
-                return f"{size_bytes:.2f} {unit}"
-            size_bytes /= 1024.0
-        return f"{size_bytes:.2f} TB"
 
 
-def backup_motherduck_to_local(
-    motherduck_db: str = MOTHERDUCK_DATABASE,
-    local_backup_path: str = "data/backup_job_market.duckdb",
-    token: str = None
-) -> bool:
-    """
-    Fonction principale de backup MotherDuck → Local
-    
-    Args:
-        motherduck_db: Nom de la base MotherDuck
-        local_backup_path: Chemin du fichier de backup local
-        token: Token MotherDuck (optionnel, sinon via env var)
-    
-    Returns:
-        True si succès, False sinon
-    
-    Example:
-        >>> backup_motherduck_to_local()
-        >>> backup_motherduck_to_local("my_db", "backups/my_backup.duckdb")
-    """
-    try:
-        backup_manager = MotherDuckBackup(motherduck_db, local_backup_path, token)
-        nb_tables, total_rows, table_names = backup_manager.backup()
-        return True
-    except Exception as e:
-        print(f"\n❌ Le backup a échoué: {e}")
-        return False
+def main():
+    # Configuration
+    BACKUP_FILE = "data/backup_job_market.duckdb"
+    EXCLUDE_LIST = ['job_offers_cleaned']
 
+    backup_job = MotherDuckBackup(
+        motherduck_db=MOTHERDUCK_DATABASE,
+        local_backup_path=BACKUP_FILE,
+        exclude_tables=EXCLUDE_LIST
+    )
 
-# ============================================================================
-# POINT D'ENTRÉE DU SCRIPT
-# ============================================================================
+    success = backup_job.run_backup()
+    
+    # Code de sortie explicite pour l'orchestrateur (0=OK, 1=KO)
+    sys.exit(0 if success else 1)
+
 
 if __name__ == "__main__":
-    print("""
-    ╔═══════════════════════════════════════════════════════════════════════╗
-    ║           MOTHERDUCK BACKUP - COLD STORAGE UTILITY                    ║
-    ║                                                                       ║
-    ║  Ce script télécharge une copie complète de votre base MotherDuck    ║
-    ║  vers un fichier DuckDB local pour sécurisation (Cold Storage).      ║
-    ╚═══════════════════════════════════════════════════════════════════════╝
-    """)
-    
-    # Configuration (peut être modifiée selon vos besoins)
-    LOCAL_BACKUP_PATH = "data/backup_job_market.duckdb"
-    
-    # Exécution du backup
-    success = backup_motherduck_to_local(
-        motherduck_db=MOTHERDUCK_DATABASE,
-        local_backup_path=LOCAL_BACKUP_PATH
-    )
-    
-    # Code de sortie
-    exit(0 if success else 1)
+    main()
