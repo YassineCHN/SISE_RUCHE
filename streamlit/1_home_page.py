@@ -16,3 +16,8 @@ with st.container(horizontal=True):
         st.image("./static/Logo_bis.png", width="content")
     with cl4:
         st.image("./static/Logo2_bis.png", width="content")
+
+st.divider()
+
+with st.container():
+    st.header("Architecture applicative : ")
