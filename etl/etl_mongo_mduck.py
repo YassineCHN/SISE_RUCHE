@@ -37,7 +37,7 @@ from pymongo import MongoClient
 # MotherDuck
 import duckdb
     # import Mduckdb name
-from config import MOTHERDUCK_DATABASE
+from etl.config import MOTHERDUCK_DATABASE
 
 
 # NLP & ML
