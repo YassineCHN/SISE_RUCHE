@@ -1,7 +1,7 @@
 """
 Geolocation Enrichment - VERSION FINALE
 ========================================
-Avec retry, timeout augmenté, et mapping des régions françaises
+Avec get_full_location_info() qui retourne (lat, lon, département)
 """
 
 import pandas as pd 
@@ -20,41 +20,80 @@ COMPLETE_REGION_MAPPING = {
     '92': ('Île-de-France', '11'), '93': ('Île-de-France', '11'),
     '94': ('Île-de-France', '11'), '95': ('Île-de-France', '11'),
     
+    # Auvergne-Rhône-Alpes
+    '01': ('Auvergne-Rhône-Alpes', '84'), '03': ('Auvergne-Rhône-Alpes', '84'),
+    '07': ('Auvergne-Rhône-Alpes', '84'), '15': ('Auvergne-Rhône-Alpes', '84'),
+    '26': ('Auvergne-Rhône-Alpes', '84'), '38': ('Auvergne-Rhône-Alpes', '84'),
+    '42': ('Auvergne-Rhône-Alpes', '84'), '43': ('Auvergne-Rhône-Alpes', '84'),
+    '63': ('Auvergne-Rhône-Alpes', '84'), '69': ('Auvergne-Rhône-Alpes', '84'),
+    '73': ('Auvergne-Rhône-Alpes', '84'), '74': ('Auvergne-Rhône-Alpes', '84'),
+    
+    # Provence-Alpes-Côte d'Azur
+    '04': ("Provence-Alpes-Côte d'Azur", '93'), '05': ("Provence-Alpes-Côte d'Azur", '93'),
+    '06': ("Provence-Alpes-Côte d'Azur", '93'), '13': ("Provence-Alpes-Côte d'Azur", '93'),
+    '83': ("Provence-Alpes-Côte d'Azur", '93'), '84': ("Provence-Alpes-Côte d'Azur", '93'),
+    
+    # Nouvelle-Aquitaine
+    '16': ('Nouvelle-Aquitaine', '75'), '17': ('Nouvelle-Aquitaine', '75'),
+    '19': ('Nouvelle-Aquitaine', '75'), '23': ('Nouvelle-Aquitaine', '75'),
+    '24': ('Nouvelle-Aquitaine', '75'), '33': ('Nouvelle-Aquitaine', '75'),
+    '40': ('Nouvelle-Aquitaine', '75'), '47': ('Nouvelle-Aquitaine', '75'),
+    '64': ('Nouvelle-Aquitaine', '75'), '79': ('Nouvelle-Aquitaine', '75'),
+    '86': ('Nouvelle-Aquitaine', '75'), '87': ('Nouvelle-Aquitaine', '75'),
+    
+    # Occitanie
+    '09': ('Occitanie', '76'), '11': ('Occitanie', '76'),
+    '12': ('Occitanie', '76'), '30': ('Occitanie', '76'),
+    '31': ('Occitanie', '76'), '32': ('Occitanie', '76'),
+    '34': ('Occitanie', '76'), '46': ('Occitanie', '76'),
+    '48': ('Occitanie', '76'), '65': ('Occitanie', '76'),
+    '66': ('Occitanie', '76'), '81': ('Occitanie', '76'),
+    '82': ('Occitanie', '76'),
+    
+    # Hauts-de-France
+    '02': ('Hauts-de-France', '32'), '59': ('Hauts-de-France', '32'),
+    '60': ('Hauts-de-France', '32'), '62': ('Hauts-de-France', '32'),
+    '80': ('Hauts-de-France', '32'),
+    
+    # Grand Est
+    '08': ('Grand Est', '44'), '10': ('Grand Est', '44'),
+    '51': ('Grand Est', '44'), '52': ('Grand Est', '44'),
+    '54': ('Grand Est', '44'), '55': ('Grand Est', '44'),
+    '57': ('Grand Est', '44'), '67': ('Grand Est', '44'),
+    '68': ('Grand Est', '44'), '88': ('Grand Est', '44'),
+    
+    # Bretagne
+    '22': ('Bretagne', '53'), '29': ('Bretagne', '53'),
+    '35': ('Bretagne', '53'), '56': ('Bretagne', '53'),
+    
+    # Pays de la Loire
+    '44': ('Pays de la Loire', '52'), '49': ('Pays de la Loire', '52'),
+    '53': ('Pays de la Loire', '52'), '72': ('Pays de la Loire', '52'),
+    '85': ('Pays de la Loire', '52'),
+    
+    # Normandie
+    '14': ('Normandie', '28'), '27': ('Normandie', '28'),
+    '50': ('Normandie', '28'), '61': ('Normandie', '28'),
+    '76': ('Normandie', '28'),
+    
+    # Bourgogne-Franche-Comté
+    '21': ('Bourgogne-Franche-Comté', '27'), '25': ('Bourgogne-Franche-Comté', '27'),
+    '39': ('Bourgogne-Franche-Comté', '27'), '58': ('Bourgogne-Franche-Comté', '27'),
+    '70': ('Bourgogne-Franche-Comté', '27'), '71': ('Bourgogne-Franche-Comté', '27'),
+    '89': ('Bourgogne-Franche-Comté', '27'), '90': ('Bourgogne-Franche-Comté', '27'),
+    
+    # Centre-Val de Loire
+    '18': ('Centre-Val de Loire', '24'), '28': ('Centre-Val de Loire', '24'),
+    '36': ('Centre-Val de Loire', '24'), '37': ('Centre-Val de Loire', '24'),
+    '41': ('Centre-Val de Loire', '24'), '45': ('Centre-Val de Loire', '24'),
     
     # Corse
     '2A': ('Corse', '94'), '2B': ('Corse', '94'),
 }
 
-# ============================================================================
-# Coordonnées des arrondissements de Paris (fallback)
-# ============================================================================
-
-PARIS_ARRONDISSEMENTS = {
-    '75001': (48.8632, 2.3367),  # 1er
-    '75002': (48.8679, 2.3418),  # 2e
-    '75003': (48.8644, 2.3630),  # 3e
-    '75004': (48.8564, 2.3522),  # 4e
-    '75005': (48.8462, 2.3481),  # 5e
-    '75006': (48.8508, 2.3325),  # 6e
-    '75007': (48.8564, 2.3107),  # 7e
-    '75008': (48.8725, 2.3118),  # 8e
-    '75009': (48.8768, 2.3394),  # 9e
-    '75010': (48.8760, 2.3631),  # 10e
-    '75011': (48.8594, 2.3790),  # 11e
-    '75012': (48.8412, 2.3891),  # 12e
-    '75013': (48.8322, 2.3561),  # 13e
-    '75014': (48.8337, 2.3274),  # 14e ← CELUI-CI !
-    '75015': (48.8401, 2.2986),  # 15e
-    '75016': (48.8557, 2.2671),  # 16e
-    '75017': (48.8873, 2.3090),  # 17e
-    '75018': (48.8927, 2.3444),  # 18e
-    '75019': (48.8838, 2.3789),  # 19e
-    '75020': (48.8632, 2.3979),  # 20e
-}
-
 
 class GeoRefFranceV2:
-    """Client with increased timeout and retry logic"""
+    """Client with get_full_location_info() method"""
     BASE_URL = "https://data.enseignementsup-recherche.gouv.fr/api/explore/v2.1/catalog/datasets/fr-esr-referentiel-geographique/records"
 
     def _request(self, params: dict, max_retries: int = 3) -> Optional[dict]:
@@ -84,34 +123,32 @@ class GeoRefFranceV2:
         
         return None
 
-    def _clean_city_name(self, city_name: str) -> str:
-        """Clean city name for better matching"""
-        if not city_name:
-            return ""
+    def get_full_location_info(self, city_name: str) -> Optional[Tuple[float, float, str]]:
+        """
+        🆕 NOUVELLE MÉTHODE: Récupère (latitude, longitude, département) depuis l'API
         
-        # Remove arrondissement mentions
-        clean = city_name.strip()
-        
-        # "Paris 14e Arrondissement" → "Paris"
-        if "arrondissement" in clean.lower():
-            clean = clean.split()[0]  # Take first word (usually city name)
-        
-        # Remove extra spaces
-        clean = ' '.join(clean.split())
-        
-        return clean
-
-    def get_coords_by_city(self, city_name: str) -> Optional[Tuple[float, float]]:
-        """Get coordinates by city name"""
-        if not city_name:
+        Args:
+            city_name: Nom de ville nettoyé
+            
+        Returns:
+            Tuple (lat, lon, code_département) ou None
+            
+        Example:
+            >>> api.get_full_location_info("Paris")
+            (48.8566, 2.3522, '75')
+        """
+        if not city_name or city_name == 'UNKNOWN':
             return None
-        
-        # ✅ Clean city name
-        clean_name = self._clean_city_name(city_name)
-        
-        params = {'where': f'com_nom="{clean_name}"', 'limit': 1}
+       
+        # Essai 1: Recherche exacte
+        params = {'where': f'com_nom="{city_name}"', 'limit': 1}
         data = self._request(params)
 
+        # Essai 2: Recherche fuzzy si échec
+        if not data or 'results' not in data or not data['results']:
+            params = {'where': f'search(com_nom, "{city_name}")', 'limit': 1}
+            data = self._request(params)
+            
         if not data or 'results' not in data or not data['results']:
             return None
         
@@ -125,10 +162,18 @@ class GeoRefFranceV2:
         
         lat = geo.get('lat')
         lon = geo.get('lon')
+        dept_code = record.get('dep_code')  # ← DÉPARTEMENT DEPUIS L'API
         
-        if lat is not None and lon is not None:
-            return (float(lat), float(lon))
+        if lat is not None and lon is not None and dept_code:
+            return (float(lat), float(lon), str(dept_code))
         
+        return None
+
+    def get_coords_by_city(self, city_name: str) -> Optional[Tuple[float, float]]:
+        """Get coordinates by city name (legacy - utilise get_full_location_info)"""
+        result = self.get_full_location_info(city_name)
+        if result:
+            return (result[0], result[1])
         return None
 
     def get_coords_by_department(self, dep_code: str) -> Optional[Tuple[float, float]]:
@@ -136,25 +181,25 @@ class GeoRefFranceV2:
         if not dep_code:
             return None
         
-        # ✅ Utiliser le mapping des régions pour les coordonnées
+        # Utiliser le mapping des régions pour les coordonnées
         if dep_code in COMPLETE_REGION_MAPPING:
             region_name, _ = COMPLETE_REGION_MAPPING[dep_code]
             
             # Coordonnées approximatives des chefs-lieux de région
             region_coords = {
-                'Île-de-France': (48.8566, 2.3522),  # Paris
-                'Auvergne-Rhône-Alpes': (45.7640, 4.8357),  # Lyon
-                "Provence-Alpes-Côte d'Azur": (43.2965, 5.3698),  # Marseille
-                'Nouvelle-Aquitaine': (44.8378, -0.5792),  # Bordeaux
-                'Occitanie': (43.6047, 1.4442),  # Toulouse
-                'Hauts-de-France': (50.6292, 3.0573),  # Lille
-                'Grand Est': (48.5734, 7.7521),  # Strasbourg
-                'Bretagne': (48.1173, -1.6778),  # Rennes
-                'Pays de la Loire': (47.2184, -1.5536),  # Nantes
-                'Normandie': (49.4432, 1.0993),  # Rouen
-                'Bourgogne-Franche-Comté': (47.2380, 6.0243),  # Besançon
-                'Centre-Val de Loire': (47.9029, 1.9093),  # Orléans
-                'Corse': (41.9270, 8.7369),  # Ajaccio
+                'Île-de-France': (48.8566, 2.3522),
+                'Auvergne-Rhône-Alpes': (45.7640, 4.8357),
+                "Provence-Alpes-Côte d'Azur": (43.2965, 5.3698),
+                'Nouvelle-Aquitaine': (44.8378, -0.5792),
+                'Occitanie': (43.6047, 1.4442),
+                'Hauts-de-France': (50.6292, 3.0573),
+                'Grand Est': (48.5734, 7.7521),
+                'Bretagne': (48.1173, -1.6778),
+                'Pays de la Loire': (47.2184, -1.5536),
+                'Normandie': (49.4432, 1.0993),
+                'Bourgogne-Franche-Comté': (47.2380, 6.0243),
+                'Centre-Val de Loire': (47.9029, 1.9093),
+                'Corse': (41.9270, 8.7369),
             }
             
             if region_name in region_coords:
@@ -188,10 +233,7 @@ class GeoRefFranceV2:
         if not partial_name or len(partial_name) < 3:
             return None
         
-        # ✅ Clean name first
-        clean_name = self._clean_city_name(partial_name)
-        
-        params = {'where': f'search(com_nom, "{clean_name}")', 'limit': 1}
+        params = {'where': f'search(com_nom, "{partial_name}")', 'limit': 1}
         data = self._request(params)
 
         if not data or 'results' not in data or not data['results']:
@@ -214,115 +256,23 @@ class GeoRefFranceV2:
         return None
 
 
-def enrich_locations_with_coordinates(df_locations: pd.DataFrame) -> pd.DataFrame:
-    """
-    Enrich with coordinates - WITH PROGRESS BAR
-    """
-    print("STEP 9.2b: Enriching locations with geographic coordinates...")
-    print("  ⚠️ This may take 10-15 minutes for 1000+ locations...")
-
-    geo_api = GeoRefFranceV2()
-    enriched_count = 0
-    skipped_count = 0
-    error_count = 0
-    
-    total = len(df_locations)
-
-    for idx, row in df_locations.iterrows():
-        ville = row.get('ville')
-        departement = row.get('departement')
-        
-        # Progress indicator
-        if idx % 50 == 0 and idx > 0:
-            pct = (idx / total) * 100
-            print(f"  📊 Progress: {idx}/{total} ({pct:.1f}%) - Enriched: {enriched_count}")
-        
-        # Skip UNKNOWN
-        if ville == 'UNKNOWN':
-            skipped_count += 1
-            continue
-        
-        coords = None
-        
-        try:
-            # ✅ Strategy 0: Arrondissements de Paris (hardcodé)
-            if ville and "arrondissement" in str(ville).lower() and departement == '75':
-                # Extraire le numéro d'arrondissement
-                import re
-                match = re.search(r'\b(\d{1,2})[eè]?\b', str(ville))
-                if match:
-                    arr_num = match.group(1).zfill(2)  # "14" → "14", "1" → "01"
-                    postal_code = f"750{arr_num}"
-                    if postal_code in PARIS_ARRONDISSEMENTS:
-                        coords = PARIS_ARRONDISSEMENTS[postal_code]
-                        print(f"  ✅ {ville} (arrondissement) → {coords}")
-            
-            # Strategy 1: City name
-            if coords is None and ville and isinstance(ville, str) and ville.strip():
-                coords = geo_api.get_coords_by_city(ville.strip())
-            
-            # Strategy 2: Fuzzy
-            if coords is None and ville and isinstance(ville, str) and len(ville.strip()) > 3:
-                coords = geo_api.search_city(ville.strip())
-            
-            # Strategy 3: Department
-            if coords is None and departement and isinstance(departement, str) and departement.strip():
-                coords = geo_api.get_coords_by_department(departement.strip())
-            
-            # Update
-            if coords and len(coords) == 2:
-                df_locations.at[idx, 'latitude'] = coords[0]
-                df_locations.at[idx, 'longitude'] = coords[1]
-                enriched_count += 1
-            
-            # ✅ Rate limiting: 1 seconde entre requêtes
-            time.sleep(1)
-                
-        except Exception as e:
-            error_count += 1
-            continue
-
-    print(f"\n  ✅ Geocoding complete:")
-    print(f"     - Enriched: {enriched_count}/{total}")
-    print(f"     - Skipped (UNKNOWN): {skipped_count}")
-    print(f"     - Errors: {error_count}")
-
-    return df_locations
-
-
-def geocode_single_location(city: str, department: str = None) -> Optional[Tuple[float, float]]:
-    """Test single location"""
-    if not city:
-        return None
-        
-    geo_api = GeoRefFranceV2()
-    
-    try:
-        coords = geo_api.get_coords_by_city(city)
-        if coords is None and len(city) > 3:
-            coords = geo_api.search_city(city)
-        if coords is None and department:
-            coords = geo_api.get_coords_by_department(department)
-        return coords
-    except Exception as e:
-        print(f"Error: {e}")
-        return None
-
-
 if __name__ == "__main__":
-    """Tests"""
-    print("Testing Geolocation Module")
+    """Tests de la nouvelle méthode"""
     print("=" * 60)
+    print("TEST: get_full_location_info()")
+    print("=" * 60 + "\n")
     
-    # Test Paris 14e
-    result = geocode_single_location("Paris 14e Arrondissement", "75")
-    print(f"Paris 14e: {result}")
+    api = GeoRefFranceV2()
     
-    # Test villes normales
-    result = geocode_single_location("Lyon", "69")
-    print(f"Lyon: {result}")
+    tests = ["Paris", "Lyon", "Marseille", "Bordeaux","Nanc", "Saint Etienne"]
     
-    result = geocode_single_location("Marseille", "13")
-    print(f"Marseille: {result}")
+    for city in tests:
+        result = api.get_full_location_info(city)
+        if result:
+            lat, lon, dept = result
+            print(f"✅ {city:15s} → lat={lat:.4f}, lon={lon:.4f}, dept={dept}")
+        else:
+            print(f"❌ {city:15s} → Not found")
+        time.sleep(1)
     
     print("\n" + "=" * 60)
