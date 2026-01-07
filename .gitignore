@@ -10,7 +10,7 @@ scrapers/.venv/
 scrapers/venv/
 scrapers/env/
 env_romain_ruche/
-
+.venv
 # ======================
 # PYTHON CACHE
 # ======================
@@ -32,3 +32,5 @@ scrapers/jobteaser/archives/
 .idea/
 .DS_Store
 Thumbs.db
+.dependancy_ProjetNLP
+__pycache__/
