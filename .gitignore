@@ -10,7 +10,7 @@ scrapers/.venv/
 scrapers/venv/
 scrapers/env/
 env_romain_ruche/
-
+.venv
 # ======================
 # PYTHON CACHE
 # ======================
