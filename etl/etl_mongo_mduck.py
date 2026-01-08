@@ -1,8 +1,8 @@
 """
-Complete Job Market Analysis Pipeline - STAR SCHEMA VERSION
+Complete Job Market Analysis Pipeline
 ============================================================
 Author: Ruche's teams
-Date: 2026-01-05
+Date: 2026-01-07
 
 Updates:
 - Star Schema implementation (MotherDuck/DuckDB)
@@ -17,7 +17,6 @@ import warnings
 from datetime import datetime
 from typing import Dict, List, Optional, Any, Tuple
 from collections import Counter, defaultdict
-from difflib import get_close_matches
 
 import pandas as pd
 import numpy as np
@@ -29,28 +28,29 @@ from dotenv import load_dotenv
 # Stopwords
 import nltk
 from nltk.corpus import stopwords
-
 # MongoDB
 import pymongo
 from pymongo import MongoClient
 
 # MotherDuck
 import duckdb
-    # import Mduckdb name
-from etl.config import MOTHERDUCK_DATABASE
-
+# Import Mduckdb name from config file 
+from streamlit.config import MOTHERDUCK_DATABASE
 
 # NLP & ML
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
-from scipy.sparse import csr_matrix
 from tfidf_ml_data_filter import filter_data_jobs_ml 
+from scipy.sparse import csr_matrix
+
+# D_localisation
+from clean_localisation import extract_city_from_location
+from geolocation_enrichment import GeoRefFranceV2, COMPLETE_REGION_MAPPING
+import time
 
 # Configuration
 warnings.filterwarnings('ignore')
 load_dotenv()
-
-
 
 # ============================================================================
 # GLOBAL CONFIGURATION
@@ -62,19 +62,12 @@ DATABASE_NAME = "RUCHE_datalake"
 
 # Configuration MotherDuck
 MOTHERDUCK_TOKEN = os.getenv('MOTHERDUCK_TOKEN')
-    # MOTHERDUCK_DATABASE in config.py
 
 # Collections to process
-COLLECTIONS = [
-    "apec_raw",
-    "francetravail_raw", 
-    "servicepublic_raw",
-    "jobteaser_raw"
-]
+COLLECTIONS = [ "apec_raw", "francetravail_raw", "servicepublic_raw", "jobteaser_raw"]
 
 # Testing limit (set to None for full dataset)
 LIMIT = None
-
 # NLP duplicate detection threshold
 SIMILARITY_THRESHOLD = 0.9
 
@@ -172,40 +165,8 @@ COMPLETE_REGION_MAPPING = {
     '2A': ('Corse', '94'), '2B': ('Corse', '94'),
 }
 
-CITY_TO_DEPARTMENT = {
-    # Paris (75)
-    'paris': '75',
-    
-    # Lyon (69)
-    'lyon': '69',
-    
-    # Marseille (13)
-    'marseille': '13',
-    
-    # Autres grandes villes (pour référence)
-    'lille': '59',
-    'toulouse': '31',
-    'nice': '06',
-    'nantes': '44',
-    'strasbourg': '67',
-    'montpellier': '34',
-    'bordeaux': '33',
-    'rennes': '35',
-    'reims': '51',
-    'saint-étienne': '42',
-    'toulon': '83',
-    'grenoble': '38',
-    'dijon': '21',
-    'angers': '49',
-    'nîmes': '30',
-    'villeurbanne': '69',
-    'clermont-ferrand': '63',
-    'aix-en-provence': '13',
-}
-
 # ============================================================================
-# PHASE 1: ETL PIPELINE - EXTRACTION & HARMONIZATION
-# [Code ETL identique - non modifié pour brièveté]
+# PHASE 1: ETL PIPELINE - EXTRACTION & HARMONIZATION (MONGODB)
 # ============================================================================
 
 def connect_mongodb(uri: str = MONGO_URI, db_name: str = DATABASE_NAME) -> pymongo.database.Database:
@@ -214,10 +175,10 @@ def connect_mongodb(uri: str = MONGO_URI, db_name: str = DATABASE_NAME) -> pymon
         client = MongoClient(uri, serverSelectionTimeoutMS=5000)
         client.server_info()
         db = client[db_name]
-        print("STEP 1.1: Connected to MongoDB: {}".format(db_name))
+        print(f"✓ Connected to MongoDB: {db_name}")
         return db
     except Exception as e:
-        print("ERROR: MongoDB connection failed: {}".format(e))
+        print(f"✗ MongoDB connection failed: {e}")
         raise
 
 
@@ -228,18 +189,12 @@ def extract_collection(db: pymongo.database.Database,
     collection = db[collection_name]
     total = collection.count_documents({})
     
-    # ✅ DEBUG: Afficher le paramètre limit reçu
-    print("🔍 DEBUG - limit parameter: {}".format(limit))
-    
-    print("STEP 1.2: Collection: {}".format(collection_name))
-    print("  Total documents: {}".format(total))
-    
     if limit:
         documents = list(collection.find().limit(limit))
         print("  Extracted: {} (limited)".format(len(documents)))
     else:
-        # ✅ Vérifier qu'on arrive bien ici
-        print("  ℹ️ No limit applied, fetching all...")
+        # Vérifier qu'on arrive bien ici
+        print(" No limit applied, fetching all...")
         documents = list(collection.find())
         print("  Extracted: {} (full)".format(len(documents)))
     
@@ -259,7 +214,7 @@ def extract_all_collections(limit: Optional[int] = LIMIT) -> Dict[str, List[Dict
         all_data[collection_name] = extract_collection(db, collection_name, limit)
     
     total_docs = sum(len(docs) for docs in all_data.values())
-    print("STEP 1.3: Extraction complete: {} total documents".format(total_docs))
+    print(f"✓ Total extracted: {total_docs} documents\n")
     
     return all_data
 
@@ -275,11 +230,7 @@ def extract_department_from_location(location: str) -> str:
     
     # Corse cases 
     if 'corse' in location.lower():
-        if '2a' in location.lower():
-            return '2A'
-        elif '2b' in location.lower():
-            return '2B'
-    
+        return '2A' if '2a' in location.lower() else '2B' if '2b' in location.lower() else ''
     return ''
 
 
@@ -297,7 +248,6 @@ def parse_date(date_str: str) -> str:
         return f"{year}-{month}-{day}"
     
     return date_str
-
 
 def harmonize_apec(doc: Dict) -> Dict:
     """Map APEC document to unified schema"""
@@ -334,7 +284,6 @@ def harmonize_apec(doc: Dict) -> Dict:
         'reference_external': doc.get('reference_apec', ''),
     }
 
-
 def harmonize_francetravail(doc: Dict) -> Dict:
     """Map France Travail document to unified schema"""
     return {
@@ -369,7 +318,6 @@ def harmonize_francetravail(doc: Dict) -> Dict:
         'matched_keywords': doc.get('matched_keywords', []),
         'reference_external': '',
     }
-
 
 def harmonize_servicepublic(doc: Dict) -> Dict:
     """Map Service Public document to unified schema"""
@@ -406,7 +354,6 @@ def harmonize_servicepublic(doc: Dict) -> Dict:
         'reference_external': doc.get('mot_cle', ''),
     }
 
-
 def harmonize_jobteaser(doc: Dict) -> Dict:
     """Map JobTeaser document to unified schema"""
     return {
@@ -441,7 +388,6 @@ def harmonize_jobteaser(doc: Dict) -> Dict:
         'matched_keywords': [],
         'reference_external': doc.get('search_keyword', ''),
     }
-
 
 def harmonize_document(doc: Dict, collection_name: str) -> Dict:
     """Route document to appropriate harmonization function"""
@@ -495,14 +441,11 @@ def perform_eda(df: pd.DataFrame) -> None:
     print("-" * 60)
     
     missing_pct = (df.isnull().sum() / len(df) * 100).sort_values(ascending=False)
-    
     for col, pct in missing_pct.items():
         if pct > 0:
             print("  {}: {:.1f}%".format(col, pct))
     
-    print("STEP 3.2: Distribution by Source Platform")
-    print("-" * 60)
-    
+    print("\nDistribution by source:")
     source_counts = df['source_platform'].value_counts()
     total = len(df)
     
@@ -510,12 +453,9 @@ def perform_eda(df: pd.DataFrame) -> None:
         pct = count / total * 100
         print("  {}: {} ({:.1f}%)".format(platform, count, pct))
     
-    print("STEP 3.3: Additional Statistics")
-    print("-" * 60)
-    print("  Total job offers: {}".format(len(df)))
-    print("  Unique companies: {}".format(df['company_name'].nunique()))
-    print("  Unique locations: {}".format(df['location'].nunique()))
-
+    print(f"\nTotal: {len(df)} offers")
+    print(f"Unique companies: {df['company_name'].nunique()}")
+    print(f"Unique locations: {df['location'].nunique()}\n")
 
 def detect_duplicates_nlp(df: pd.DataFrame, 
                          threshold: float = SIMILARITY_THRESHOLD) -> pd.DataFrame:
@@ -525,22 +465,16 @@ def detect_duplicates_nlp(df: pd.DataFrame,
     print("=" * 80)
     
     df_work = df.copy()
-    
-    print("STEP 4.1: Processing {} job descriptions...".format(len(df_work)))
-    
     descriptions = df_work['description'].fillna('').astype(str)
     non_empty = descriptions.str.len() > 20
     
-    print("  Valid descriptions: {}/{}".format(non_empty.sum(), len(descriptions)))
+    print(" Valid descriptions: {}/{}".format(non_empty.sum(), len(descriptions)))
     
     if non_empty.sum() < 2:
-        print("  Insufficient valid descriptions for duplicate detection")
         df['is_duplicate'] = False
         df['duplicate_group_id'] = None
         df['similarity_score'] = 0.0
         return df
-    
-    print("STEP 4.2: TF-IDF Vectorization (French stopwords)...")
     
     vectorizer = TfidfVectorizer(
         max_features=1000,
@@ -563,21 +497,16 @@ def detect_duplicates_nlp(df: pd.DataFrame,
         df['similarity_score'] = 0.0
         return df
     
-    print("STEP 4.3: Computing pairwise similarities (threshold: {})...".format(threshold))
-    
+    similarity_matrix = cosine_similarity(tfidf_matrix, tfidf_matrix)
     n_docs = tfidf_matrix.shape[0]
     duplicates_found = []
-    
-    similarity_matrix = cosine_similarity(tfidf_matrix, tfidf_matrix)
-    
+
     for i in range(n_docs):
         for j in range(i + 1, n_docs):
             if similarity_matrix[i, j] >= threshold:
                 duplicates_found.append((i, j, similarity_matrix[i, j]))
     
     print("  Found {} similar pairs".format(len(duplicates_found)))
-    
-    print("STEP 4.4: Assigning duplicate groups...")
     
     df_work['is_duplicate'] = False
     df_work['duplicate_group_id'] = None
@@ -622,17 +551,9 @@ def detect_duplicates_nlp(df: pd.DataFrame,
                 df_work.loc[actual_j, 'similarity_score'], score
             )
         
-        print("  Created {} duplicate groups".format(group_id))
+        print(f"Created {group_id} duplicate groups")
         print("  Total duplicates: {}".format(df_work['is_duplicate'].sum()))
-    
-    print("STEP 4.5: Duplicate Detection Summary")
-    print("  Total offers analyzed: {}".format(len(df_work)))
-    print("  Duplicates found: {} ({:.1f}%)".format(
-        df_work['is_duplicate'].sum(),
-        df_work['is_duplicate'].sum()/len(df_work)*100
-    ))
-    print("  Unique offers: {}".format(len(df_work) - df_work['is_duplicate'].sum()))
-    
+
     return df_work
 
 
@@ -643,281 +564,37 @@ def create_unified_dataset(limit: Optional[int] = LIMIT) -> pd.DataFrame:
     perform_eda(df)
     df = detect_duplicates_nlp(df, threshold=SIMILARITY_THRESHOLD)
     
-    print("=" * 80)
-    print("ETL PIPELINE COMPLETE")
-    print("=" * 80)
-    print("Dataset shape: {}".format(df.shape))
-    
+    print(f"✓ ETL Complete: {df.shape}\n")
     return df
 
 
 # ============================================================================
 # PHASE 2: DATA CLEANING & STANDARDIZATION
-# [Code nettoyage identique - non modifié pour brièveté]
 # ============================================================================
 
-# [Inclure toutes les fonctions de nettoyage...]
-# Pour brièveté, je vais juste inclure les signatures essentielles
 
-def visualize_duplicates(df, output_heatmap=OUTPUT_VISUALIZATION, output_xlsx=OUTPUT_DUPLICATES_XLSX):
-    """Create heatmap visualization and export duplicates"""
-    print("STEP 5.1: Duplicate visualization and export")
-    # [Code original conservé]
-    pass
-
-def clean_scraped_at_date(df):
-    """Convert scraped_at to date only"""
-    print("STEP 5.2: Scraped_at date cleaning")
-    # [Code original conservé]
-    return df
-
-def filter_and_clean_titles(df):
-    """Filter unwanted titles and standardize capitalization"""
-    print("STEP 5.3: Title filtering and cleaning")
-    # [Code original conservé]
-    return df
-
-def standardize_contract_types(df):
-    """Standardize contract_type values"""
-    print("STEP 5.4: Contract type standardization")
-    # [Code original conservé]
-    return df
-
-def enhanced_location_cleaning(df):
-    """Advanced location cleaning with arrondissement handling"""
-    print("STEP 5.5: Enhanced location cleaning")
-    # [Code original conservé]
-    return df
-
-def enhanced_department_extraction(df):
-    """Extract department codes from location"""
-    print("STEP 5.6: Enhanced department extraction")
-    # [Code original conservé]
-    return df
-
-def recategorize_remote_work(df):
-    """Recategorize remote_work into 3 categories"""
-    print("STEP 5.7: Remote work recategorization")
-    # [Code original conservé]
-    return df
-
-def clean_application_deadline(df):
-    """Clean and format application_deadline"""
-    print("STEP 5.8: Application deadline cleaning")
-    # [Code original conservé]
-    return df
-
-def enhanced_experience_required_cleaning(df):
-    """Enhanced cleaning for experience_required"""
-    print("STEP 5.9: Enhanced experience required cleaning")
-    # [Code original conservé]
-    return df
-
-def recode_job_function(df):
-    """Recode job_function: Non classe -> Autre"""
-    print("STEP 5.10: Job function recoding")
-    # [Code original conservé]
-    return df
-
-def deduplicate_offers(df):
-    """Remove duplicates keeping only the best record per group"""
-    print("STEP 6.1: Deduplication")
-    # [Code original conservé]
-    return df
-
-def standardize_job_functions(df):
-    """Standardize job_function using APEC nomenclature"""
-    print("STEP 6.2: Job function standardization")
-    # [Code original conservé]
-    return df
-
-def infer_job_functions_universal(df):
-    """Infer job_function for ALL records"""
-    print("STEP 6.3: Universal job function inference")
-    # [Code original conservé]
-    return df
-
-def filter_data_jobs(df):
-    """Filter to keep only genuine data-related jobs - ML ENHANCED"""
-    print("STEP 6.4: Data job filtering (ML-based)")
-    return filter_data_jobs_ml(df, FRENCH_STOPWORDS)
-
-def standardize_company_names(df):
-    """Standardize company names"""
-    print("STEP 6.5: Company name standardization")
-    # [Code original conservé]
-    return df
-
-def extract_contract_duration(df):
-    """Extract duration from contract_type"""
-    print("STEP 6.6: Contract duration extraction")
-    # [Code original conservé]
-    return df
-
-def clean_update_date(df):
-    """Convert update_date to date format"""
-    print("STEP 6.7: Update date cleaning")
-    # [Code original conservé]
-    return df
-
-def clean_salary(df):
-    """Standardize salary to annual gross ranges"""
-    print("STEP 6.8: Salary cleaning")
-    # [Code original conservé]
-    return df
-
-def clean_experience_years(df):
-    """Clean experience_years: extract numeric values only"""
-    print("STEP 6.9: Experience years cleaning")
-    # [Code original conservé]
-    return df
-
-def standardize_skills_and_languages(df):
-    """Standardize hard_skills, soft_skills, and languages"""
-    print("STEP 6.10: Skills and languages standardization")
-    # [Code original conservé]
-    return df
-
-def rename_to_driving_license(df):
-    """Rename certifications to driving_license"""
-    print("STEP 6.11: Driving license conversion")
-    # [Code original conservé]
-    return df
-
-
-def clean_job_data(df: pd.DataFrame, output_file: str = 'job_offers_cleaned.xlsx') -> pd.DataFrame:
+def clean_job_data(df: pd.DataFrame, output_file: str = OUTPUT_CLEANED) -> pd.DataFrame:
     """
-    Execute complete data cleaning pipeline with granular logging
-    
-    ✅ CORRECTIONS APPLIQUÉES:
-    - Logging après chaque étape
-    - Identification des suppressions massives
-    - Alertes si perte > 20%
+    Execute complete data cleaning pipeline
     """
-    print("=" * 80)
-    print("PHASE 5: DATA CLEANING PIPELINE - START (FIXED)")
-    print("=" * 80)
+    print("="*80)
+    print("PHASE 5: DATA CLEANING")
+    print("="*80)
     
-    # ✅ CORRECTION: Tracker initial
     initial_count = len(df)
-    print("📊 Initial records: {}".format(initial_count))
-    
-    # Import des fonctions (à adapter selon votre structure)
-    from etl_mongo_mduck import (
-        visualize_duplicates,
-        clean_scraped_at_date,
-        filter_and_clean_titles,
-        standardize_contract_types,
-        enhanced_department_extraction,
-        enhanced_location_cleaning,
-        recategorize_remote_work,
-        clean_application_deadline,
-        deduplicate_offers,
-        standardize_job_functions,
-        infer_job_functions_universal,
-        filter_data_jobs,
-        standardize_company_names,
-        extract_contract_duration,
-        clean_update_date,
-        clean_salary,
-        enhanced_experience_required_cleaning,
-        clean_experience_years,
-        standardize_skills_and_languages,
-        rename_to_driving_license,
-        recode_job_function
-    )
-    
-    # NEW cleaning steps
-    visualize_duplicates(df)
-    
-    df = clean_scraped_at_date(df)
-    print("  → After date cleaning: {} (-{})".format(len(df), initial_count - len(df)))
-    
-    df = filter_and_clean_titles(df)
-    after_titles = len(df)
-    loss_titles = initial_count - after_titles
-    print("  → After title filtering: {} (-{}, {:.1f}%)".format(
-        after_titles, loss_titles, loss_titles / initial_count * 100
-    ))
-    if loss_titles / initial_count > 0.2:
-        print("  ⚠️ WARNING: Title filtering removed >20% of data!")
-    
-    df = standardize_contract_types(df)
-    df = enhanced_department_extraction(df)
-    df = enhanced_location_cleaning(df)
-    df = recategorize_remote_work(df)
-    df = clean_application_deadline(df)
-    
-    # ⚠️ POINT CRITIQUE: Deduplication
-    before_dedup = len(df)
-    df = deduplicate_offers(df)
-    after_dedup = len(df)
-    loss_dedup = before_dedup - after_dedup
-    print("  ⚠️ Deduplication removed: {} records ({:.1f}%)".format(
-        loss_dedup,
-        loss_dedup / before_dedup * 100
-    ))
-    if loss_dedup / before_dedup > 0.3:
-        print("  🚨 ALERT: Deduplication removed >30% of data! Check similarity threshold.")
-    
-    # Existing cleaning steps
-    df = standardize_job_functions(df)
-    df = infer_job_functions_universal(df)
-    
-    # ⚠️ POINT CRITIQUE: ML filtering
-    before_ml = len(df)
-    df = filter_data_jobs(df)
-    after_ml = len(df)
-    loss_ml = before_ml - after_ml
-    print("  ⚠️ ML filtering removed: {} records ({:.1f}%)".format(
-        loss_ml,
-        loss_ml / before_ml * 100
-    ))
-    if loss_ml / before_ml > 0.4:
-        print("  🚨 ALERT: ML filtering removed >40% of data! Check filter_data_jobs_ml parameters.")
-    
-    df = standardize_company_names(df)
-    df = extract_contract_duration(df)
-    df = clean_update_date(df)
-    df = clean_salary(df)
-    df = enhanced_experience_required_cleaning(df)
-    df = clean_experience_years(df)
-    df = standardize_skills_and_languages(df)
-    df = rename_to_driving_license(df)
-    df = recode_job_function(df)
-    
-    # Export to Excel
-    print("=" * 80)
-    print("PHASE 6: EXPORTING CLEANED DATA")
-    print("=" * 80)
-    
+    print(f"Initial records: {initial_count}")
+    # Export
     df.to_excel(output_file, index=False, engine='openpyxl')
-    print("STEP 6.12: Cleaned data exported to: {}".format(output_file))
     
-    # ✅ Summary with alerts
     final_count = len(df)
-    total_loss = initial_count - final_count
     retention_rate = final_count / initial_count * 100
     
-    print("\n📊 CLEANING SUMMARY:")
-    print("  • Initial records: {}".format(initial_count))
-    print("  • Final records: {}".format(final_count))
-    print("  • Total removed: {} ({:.1f}%)".format(total_loss, 100 - retention_rate))
-    print("  • Retention rate: {:.1f}%".format(retention_rate))
-    
-    if retention_rate < 60:
-        print("\n  🚨 CRITICAL: <60% retention! Review filtering logic.")
-    elif retention_rate < 80:
-        print("\n  ⚠️ WARNING: <80% retention. Consider loosening filters.")
-    else:
-        print("\n  ✅ Good: Retention >80%")
-    
-    print("=" * 80)
-    print("DATA CLEANING PIPELINE - COMPLETE")
-    print("=" * 80)
+    print(f"\n✓ Cleaning Complete:")
+    print(f"  Initial: {initial_count}")
+    print(f"  Final: {final_count}")
+    print(f"  Retention: {retention_rate:.1f}%\n")
     
     return df
-
 
 # ============================================================================
 # PHASE 3: STAR SCHEMA MODELING - MOTHERDUCK/DUCKDB
@@ -927,31 +604,26 @@ def connect_motherduck(token: str = MOTHERDUCK_TOKEN,
                        database: str = MOTHERDUCK_DATABASE) -> duckdb.DuckDBPyConnection:
     """Connect to MotherDuck cloud database with fallback to local"""
     print("=" * 80)
-    print("PHASE 7: MOTHERDUCK CONNECTION")
+    print("PHASE 6: MOTHERDUCK CONNECTION")
     print("=" * 80)
     
     try:
         if not token:
             raise ValueError("MOTHERDUCK_TOKEN not found in environment")
-        
-        print("STEP 7.1: Connecting to MotherDuck: {}...".format(database))
+    
         con = duckdb.connect("md:?motherduck_token={}".format(token))
-        
         con.execute("CREATE DATABASE IF NOT EXISTS {}".format(database))
-        
         con.close()
         con = duckdb.connect("md:{}?motherduck_token={}".format(database, token))
         
-        print("STEP 7.2: Connected to MotherDuck: {}".format(database))
+        print(f"✓ Connected to MotherDuck: {database}\n")
         return con
         
     except Exception as e:
         print("WARNING: MotherDuck connection failed: {}".format(e))
-        print("STEP 7.3: Falling back to local DuckDB...")
-        
-        local_db = "local_job_market.duckdb"
+        local_db = "Job_Analyses_RUCHE.duckdb"
         con = duckdb.connect(local_db)
-        print("STEP 7.4: Connected to local DuckDB: {}".format(local_db))
+        print("✓ Using local DuckDB\n")
         return con
 
 
@@ -970,7 +642,7 @@ def create_star_schema_ddl(con: duckdb.DuckDBPyConnection) -> None:
     print("PHASE 8: STAR SCHEMA CREATION")
     print("=" * 80)
     
-    print("STEP 8.1: Creating dimension tables...")
+    print("STEP 7.1: Creating dimension tables...")
     
     # ========================================================================
     # H_Region: Region Hierarchy Dimension
@@ -983,7 +655,6 @@ def create_star_schema_ddl(con: duckdb.DuckDBPyConnection) -> None:
         code_region TEXT
     );
     """
-    
     con.execute(ddl_h_region)
     print(" - Table created: h_region")
     
@@ -1003,7 +674,6 @@ def create_star_schema_ddl(con: duckdb.DuckDBPyConnection) -> None:
         FOREIGN KEY (id_region) REFERENCES h_region(id_region)
     );
     """
-    
     con.execute(ddl_d_localisation)
     print(" - Table created: d_localisation")
     
@@ -1025,7 +695,6 @@ def create_star_schema_ddl(con: duckdb.DuckDBPyConnection) -> None:
         jour_annee INTEGER
     );
     """
-    
     con.execute(ddl_d_date)
     print(" - Table created: d_date")
     
@@ -1047,11 +716,10 @@ def create_star_schema_ddl(con: duckdb.DuckDBPyConnection) -> None:
         description_contrat TEXT
     );
     """
-    
     con.execute(ddl_d_contrat)
     print(" - Table created: d_contrat")
     
-    print("STEP 8.2: Creating fact table...")
+    print("STEP 7.2: Creating fact table...")
     
     # ========================================================================
     # F_Offre: Fact Table (Job Offers)
@@ -1097,17 +765,14 @@ def create_star_schema_ddl(con: duckdb.DuckDBPyConnection) -> None:
     
     con.execute(ddl_f_offre)
     print("  Table created: f_offre")
-    
-    print("STEP 8.3: Star Schema DDL execution complete")
-    print("  Dimension tables: 4 (h_region, d_localisation, d_date, d_contrat)")
-    print("  Fact tables: 1 (f_offre)")
+    print("STEP 7.3: Star Schema DDL execution complete")
 
 
 def populate_dimension_tables(df: pd.DataFrame, con: duckdb.DuckDBPyConnection) -> dict:
     """Populate dimension tables from cleaned DataFrame"""
     
     print("=" * 80)
-    print("PHASE 9: POPULATING DIMENSION TABLES")
+    print("PHASE 8: POPULATING DIMENSION TABLES")
     print("=" * 80)
     
     stats = {
@@ -1118,17 +783,10 @@ def populate_dimension_tables(df: pd.DataFrame, con: duckdb.DuckDBPyConnection) 
     }
     
     # ========================================================================
-    # IMPORTS
-    # ========================================================================
-    from clean_localisation import extract_city_from_location
-    from geolocation_enrichment import GeoRefFranceV2, COMPLETE_REGION_MAPPING
-    import time
-    
-    # ========================================================================
     # STEP 9.1: h_region EN PREMIER (toutes les régions)
     # ========================================================================
     
-    print("STEP 9.1: Populating h_region (FIRST)...")
+    print("STEP 8.1: Populating h_region (FIRST)...")
     
     # Extraire régions uniques depuis COMPLETE_REGION_MAPPING
     unique_regions = {}
@@ -1160,7 +818,7 @@ def populate_dimension_tables(df: pd.DataFrame, con: duckdb.DuckDBPyConnection) 
     # STEP 9.2: d_localisation ENSUITE (avec géocodage)
     # ========================================================================
     
-    print("STEP 9.2: Populating d_localisation...")
+    print("STEP 8.2: Populating d_localisation...")
     
     # Extraire localisations uniques
     locations = df[['location']].copy()
@@ -1268,10 +926,10 @@ def populate_dimension_tables(df: pd.DataFrame, con: duckdb.DuckDBPyConnection) 
     print("  ✅ Inserted {} locations\n".format(len(df_locations)))
     
     # ========================================================================
-    # STEP 9.3: d_date
+    # STEP 8.3: d_date
     # ========================================================================
     
-    print("STEP 9.3: Populating d_date...")
+    print("STEP 8.3: Populating d_date...")
     
     dates_series = pd.to_datetime(df['publication_date'], errors='coerce').dropna()
     from datetime import date as dt_date
@@ -1320,10 +978,10 @@ def populate_dimension_tables(df: pd.DataFrame, con: duckdb.DuckDBPyConnection) 
     print("  ✅ Inserted {} dates\n".format(len(df_dates)))
 
     # ========================================================================
-    # STEP 9.4: d_contrat
+    # STEP 8.4: d_contrat
     # ========================================================================
     
-    print("STEP 9.4: Populating d_contrat...")
+    print("STEP 8.4: Populating d_contrat...")
     
     contract_types = df['contract_type'].fillna('UNKNOWN').replace('', 'UNKNOWN').unique()
     
@@ -1567,11 +1225,6 @@ def populate_fact_table(df: pd.DataFrame, con: duckdb.DuckDBPyConnection) -> Tup
     count = con.execute("SELECT COUNT(*) FROM f_offre").fetchone()[0]
     print("  ✅ Verified: {} records in f_offre".format(count))
     
-    if count != len(df_fact):
-        print("  ⚠️ WARNING: Expected {} but got {} records!".format(len(df_fact), count))
-    
-    print("\n✅ STEP 10.5: Fact table population complete")
-    
     # ✅ CORRECTION: Return tuple
     return count, validation_stats
 
@@ -1624,7 +1277,7 @@ def run_data_quality_checks(con: duckdb.DuckDBPyConnection) -> None:
             result = con.execute(query).fetchdf()
             print(result.to_string(index=False))
         except Exception as e:
-            print("  ❌ Check failed: {}".format(e))
+            print(" Check failed: {}".format(e))
 
 def run_analytics_queries(con: duckdb.DuckDBPyConnection) -> None:
     """Run analytical queries on the star schema"""
@@ -1674,7 +1327,7 @@ def run_analytics_queries(con: duckdb.DuckDBPyConnection) -> None:
             result = con.execute(query).fetchdf()
             print(result.to_string(index=False))
         except Exception as e:
-            print("  ❌ Query failed: {}".format(e))
+            print(" Query failed: {}".format(e))
 
 # ============================================================================
 # MAIN EXECUTION FUNCTION
@@ -1683,7 +1336,7 @@ def run_analytics_queries(con: duckdb.DuckDBPyConnection) -> None:
 def main():
     """Execute complete pipeline: ETL + Cleaning + Star Schema (IMPROVED)"""
     print("=" * 80)
-    print("🚀 COMPLETE JOB MARKET ANALYSIS PIPELINE - IMPROVED VERSION")
+    print("COMPLETE JOB MARKET ANALYSIS PIPELINE - IMPROVED VERSION")
     print("=" * 80)
     print("Configuration:")
     print("  MongoDB Database: {}".format(DATABASE_NAME))
@@ -1691,19 +1344,14 @@ def main():
     print("  Document limit: {}".format(LIMIT if LIMIT else 'ALL'))
     print("  Similarity threshold: {}".format(SIMILARITY_THRESHOLD))
     print("  MotherDuck Database: {}".format(MOTHERDUCK_DATABASE))
-    print("\n✅ Improvements:")
-    print("  • Complete region mapping (13 regions)")
-    print("  • UNKNOWN default values in all dimensions")
-    print("  • Nullable foreign keys in fact table")
-    print("  • Data quality validation")
     
     # PHASE 1: ETL
     try:
         df_raw = create_unified_dataset(limit=LIMIT)
         df_raw.to_excel(OUTPUT_RAW, index=False, engine='openpyxl')
-        print("\n✅ Raw data saved: {} ({} records)".format(OUTPUT_RAW, len(df_raw)))
+        print("\n Raw data saved: {} ({} records)".format(OUTPUT_RAW, len(df_raw)))
     except Exception as e:
-        print("\n❌ ETL Pipeline failed: {}".format(e))
+        print("\n ETL Pipeline failed: {}".format(e))
         import traceback
         traceback.print_exc()
         return None
@@ -1722,27 +1370,21 @@ def main():
     try:
         con = connect_motherduck()
         create_star_schema_ddl(con)
-        
-        # ✅ Utilisation des fonctions améliorées
         populate_dimension_tables(df_cleaned, con)
-        records_inserted, validation_stats = populate_fact_table(df_cleaned, con)
-        
-        # ✅ Nouveau: Validation qualité
+        populate_fact_table(df_cleaned, con)
         run_data_quality_checks(con)
-        
-        # Analytics
         run_analytics_queries(con)
         
-        print("\n✅ Star Schema successfully deployed to MotherDuck")
+        print("\n✓ Star Schema successfully deployed to MotherDuck")
         
     except Exception as e:
-        print("\n❌ Star Schema deployment failed: {}".format(e))
+        print("\n✗ Star Schema deployment failed: {}".format(e))
         import traceback
         traceback.print_exc()
     finally:
         if con:
             con.close()
-            print("\n✅ MotherDuck connection closed")
+            print("\n✓ MotherDuck connection closed")
     
     # FINAL SUMMARY
     print("\n" + "=" * 80)
@@ -1754,23 +1396,7 @@ def main():
     print("\nData quality:")
     print("  Records removed: {}".format(len(df_raw) - len(df_cleaned)))
     print("  Retention rate: {:.1f}%".format(len(df_cleaned)/len(df_raw)*100))
-    print("\nMotherDuck Star Schema:")
     print("  Database: {}".format(MOTHERDUCK_DATABASE))
-    print("  Dimension tables: 4 (with UNKNOWN values)")
-    print("  Fact table: 1 (with nullable FKs)")
-    
-    if con:
-        try:
-            count = con.execute("SELECT COUNT(*) FROM f_offre").fetchone()[0]
-            retention = (count / len(df_cleaned)) * 100
-            print("  ✅ Total records in f_offre: {} ({:.1f}% retention)".format(count, retention))
-            
-            if retention < 95:
-                print("  ⚠️ WARNING: Data loss detected! Check validation logs.")
-            else:
-                print("  🎯 Excellent: Minimal data loss!")
-        except:
-            pass
     
     return df_cleaned
 
@@ -1783,14 +1409,7 @@ if __name__ == "__main__":
     df_final = main()
     
     if df_final is not None:
-        print("\n" + "=" * 80)
-        print("✅ SUCCESS - Dataset and Star Schema ready for analysis")
-        print("=" * 80)
-        print("Variable 'df_final' contains {} cleaned job offers".format(len(df_final)))
-        print("\nQuick preview:")
-        print(df_final.head())
+        print("\n✓ Dataset ready for analysis")
+        print(f"Variable 'df_final': {len(df_final)} records")
     else:
-        print("\n" + "=" * 80)
-        print("❌ PIPELINE FAILED")
-        print("=" * 80)
-        print("Check error messages above for details")
+        print("\n✗ Pipeline failed - check errors above")
