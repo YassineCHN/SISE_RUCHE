@@ -3,7 +3,7 @@ import duckdb
 import plotly.graph_objects as go
 import networkx as nx
 
-con = duckdb.connect("md:jobs_db")
+con = duckdb.connect("md:job_market_RUCHE_final")
 
 edges = con.execute(
     """

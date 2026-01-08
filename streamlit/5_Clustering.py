@@ -2,7 +2,7 @@ import streamlit as st
 import duckdb
 import plotly.express as px
 
-con = duckdb.connect("md:jobs_db")
+con = duckdb.connect("md:job_market_RUCHE_final")
 
 df = con.execute(
     """
