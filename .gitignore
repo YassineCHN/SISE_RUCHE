@@ -34,3 +34,4 @@ scrapers/jobteaser/archives/
 Thumbs.db
 .dependancy_ProjetNLP
 __pycache__/
+dump/
