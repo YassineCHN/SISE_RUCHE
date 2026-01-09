@@ -9,6 +9,7 @@ def load_jobs():
     SELECT
         job_id,
         title,
+        description,
         hard_skills,
         soft_skills
     FROM f_offre
@@ -16,12 +17,31 @@ def load_jobs():
     df = con.execute(query).df()
     con.close()
 
-    # Feature engineering NLP
-    df["ml_text"] = (
-        df["title"] + " " +
-        df["hard_skills"].apply(lambda x: " ".join(x) if x else "") * 2 +
-        " " +
-        df["soft_skills"].apply(lambda x: " ".join(x) if x else "")
+    # Nettoyage minimal
+    df["description"] = (
+        df["description"]
+        .str.replace("\n", " ", regex=False)
+        .str.strip()
     )
+
+    # ---- Construction du texte ML ----
+    def build_ml_text(row):
+        parts = []
+
+        if row["description"]:
+            parts.append(row["description"])
+
+        if row["title"]:
+            parts.append(row["title"] * 2)  # pondération légère
+
+        if row["hard_skills"]:
+            parts.append(" ".join(row["hard_skills"]) * 3)  # signal fort
+
+        if row["soft_skills"]:
+            parts.append(" ".join(row["soft_skills"]))  # signal faible
+
+        return " ".join(parts)
+
+    df["ml_text"] = df.apply(build_ml_text, axis=1)
 
     return df
