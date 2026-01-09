@@ -832,7 +832,6 @@ def create_star_schema_ddl(con: duckdb.DuckDBPyConnection) -> None:
         nb_annees_experience INTEGER,
         experience_required TEXT,
         id_ville INTEGER,
-        id_region INTEGER,
         id_contrat INTEGER,
         id_date_publication INTEGER,
         id_date_deadline INTEGER,
@@ -1255,16 +1254,6 @@ def populate_fact_table(
         except:
             id_date_deadline = 0
 
-        # Region lookup
-        try:
-            location_row = df_locations[df_locations["id_ville"] == id_ville]
-            if not location_row.empty:
-                id_region = location_row.iloc[0]["id_region"]
-            else:
-                id_region = 0
-        except:
-            id_region = 0
-
         # Experience years
         try:
             exp_years = row["experience_years"]
@@ -1318,7 +1307,6 @@ def populate_fact_table(
                 "nb_annees_experience": nb_annees_exp,
                 "experience_required": row["experience_required"],
                 "id_ville": id_ville,
-                "id_region": id_region,
                 "id_contrat": id_contrat,
                 "id_date_publication": id_date_publication,
                 "id_date_deadline": id_date_deadline,
