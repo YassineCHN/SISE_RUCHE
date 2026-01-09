@@ -7,10 +7,10 @@ import numpy as np
 import os
 from dotenv import load_dotenv, find_dotenv
 
-load_dotenv(find_dotenv()) 
+load_dotenv(find_dotenv())
 
 # Vérification token
-token = os.getenv('MOTHERDUCK_TOKEN')
+token = os.getenv("MOTHERDUCK_TOKEN")
 if not token:
     st.error("ERREUR: Token MotherDuck manquant!")
     st.stop()
@@ -21,7 +21,8 @@ MOTHERDUCK_TOKEN = token
 st.set_page_config(layout="wide", page_title="Recherche Sémantique", page_icon="🔍")
 
 # CSS moderne et épuré
-st.markdown("""
+st.markdown(
+    """
 <style>
     /* Import police moderne */
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
@@ -202,67 +203,85 @@ st.markdown("""
         border-top: 1px solid #e9ecef;
     }
 </style>
-""", unsafe_allow_html=True)
+""",
+    unsafe_allow_html=True,
+)
 
-# Sidebar
-st.sidebar.markdown("# 🏠 Home Page")
+st.markdown(
+    "<h1 style='text-align: center;'><b>  Home page 🏠</b></h1>", unsafe_allow_html=True
+)
+st.sidebar.image("./static/Logo3.png", width=150)
+st.sidebar.markdown("# Home page")
 
-try:
-    cols = st.sidebar.columns(2)
-    with cols[0]:
-        st.image("./static/Logo3.png", width='content')
-    with cols[1]:
-        st.image("./static/Logo4_bis.png", width='content')
-except:
-    pass
+with st.container(horizontal=True):
+    col1, col2 = st.columns(2)
+    with col1:
+        left = st.container(horizontal_alignment="center", border=True)
+        left.markdown(
+            "<h3 style='text-align: center;'><u>RUCHE (Réseau Unifié pour CHercher de l'Emploi)</u></h3>",
+            unsafe_allow_html=True,
+        )
+        left.image(
+            "./static/Logo3.png", width=210, caption="le projet RUCHE vise à ..."
+        )
+    with col2:
+        right = st.container(horizontal_alignment="center", border=True)
+        right.markdown(
+            "<h3 style='text-align: center;'><u> Architecture applicative : </u></h3>",
+            unsafe_allow_html=True,
+        )
+        right.image(
+            "./static/architecture.png",
+            width="stretch",
+            caption="l'application s'appuie sur ...",
+        )
 
-# Header avec logos
-try:
-    logo_cols = st.columns(4)
-    with logo_cols[0]:
-        st.image("./static/Logo3.png", width='stretch')
-    with logo_cols[1]:
-        st.image("./static/Logo4_bis.png", width='stretch')
-    with logo_cols[2]:
-        st.image("./static/Logo_bis.png", width='stretch')
-    with logo_cols[3]:
-        st.image("./static/Logo2_bis.png", width='stretch')
-except:
-    pass
+st.divider()
 
-st.markdown("<br>", unsafe_allow_html=True)
 
 # Header principal
-st.markdown("""
+st.markdown(
+    """
 <div class="search-header">
     <h1>🔍 Recherche Sémantique d'Emploi</h1>
     <p>Trouvez votre poste idéal grâce à l'intelligence artificielle</p>
 </div>
-""", unsafe_allow_html=True)
+""",
+    unsafe_allow_html=True,
+)
+
 
 # Cache resources
 @st.cache_resource
 def load_model():
-    return SentenceTransformer('sentence-transformers/paraphrase-multilingual-mpnet-base-v2')
+    return SentenceTransformer(
+        "sentence-transformers/paraphrase-multilingual-mpnet-base-v2"
+    )
+
 
 @st.cache_resource
 def get_connection():
     connection_string = f"md:{MOTHERDUCK_DATABASE}?motherduck_token={MOTHERDUCK_TOKEN}"
     return duckdb.connect(connection_string)
 
-def semantic_search(query_embedding: np.ndarray, top_k: int = 50, 
-                    ville_filter: str = None, contrat_filter: str = None) -> pd.DataFrame:
+
+def semantic_search(
+    query_embedding: np.ndarray,
+    top_k: int = 50,
+    ville_filter: str = None,
+    contrat_filter: str = None,
+) -> pd.DataFrame:
     con = get_connection()
     embedding_list = query_embedding.tolist()
-    
+
     where_clauses = ["f.embedding IS NOT NULL"]
     if ville_filter and ville_filter != "Toutes":
         where_clauses.append(f"l.ville = '{ville_filter}'")
     if contrat_filter and contrat_filter != "Tous":
         where_clauses.append(f"c.type_contrat = '{contrat_filter}'")
-    
+
     where_sql = " AND ".join(where_clauses)
-    
+
     query = f"""
     SELECT 
         f.job_id,
@@ -281,107 +300,125 @@ def semantic_search(query_embedding: np.ndarray, top_k: int = 50,
     ORDER BY similarity_score DESC
     LIMIT {top_k}
     """
-    
+
     try:
         df = con.execute(query, [embedding_list]).fetchdf()
-        df['similarity_score'] = (df['similarity_score'] * 100).round(1)
+        df["similarity_score"] = (df["similarity_score"] * 100).round(1)
         return df
     except Exception as e:
         st.error(f"Erreur recherche: {e}")
         return pd.DataFrame()
 
+
 def get_filter_options():
     con = get_connection()
     try:
-        villes = con.execute("""
+        villes = (
+            con.execute(
+                """
             SELECT DISTINCT ville FROM d_localisation 
             WHERE ville IS NOT NULL ORDER BY ville
-        """).fetchdf()['ville'].tolist()
-        
-        contrats = con.execute("""
+        """
+            )
+            .fetchdf()["ville"]
+            .tolist()
+        )
+
+        contrats = (
+            con.execute(
+                """
             SELECT DISTINCT type_contrat FROM d_contrat 
             WHERE type_contrat IS NOT NULL ORDER BY type_contrat
-        """).fetchdf()['type_contrat'].tolist()
-        
+        """
+            )
+            .fetchdf()["type_contrat"]
+            .tolist()
+        )
+
         return villes, contrats
     except:
         return [], []
+
 
 def render_job_card_native(job: dict):
     """Rendu de carte avec composants natifs Streamlit"""
     with st.container():
         st.markdown('<div class="job-card">', unsafe_allow_html=True)
-        
+
         # Titre et entreprise
-        st.markdown(f'<div class="job-title">{job.get("title", "Sans titre")}</div>', unsafe_allow_html=True)
-        st.markdown(f'<div class="job-company">{job.get("company_name", "Entreprise non spécifiée")}</div>', unsafe_allow_html=True)
-        
+        st.markdown(
+            f'<div class="job-title">{job.get("title", "Sans titre")}</div>',
+            unsafe_allow_html=True,
+        )
+        st.markdown(
+            f'<div class="job-company">{job.get("company_name", "Entreprise non spécifiée")}</div>',
+            unsafe_allow_html=True,
+        )
+
         # Badges
-        ville = job.get('ville', 'Non spécifié')
-        code_postal = job.get('code_postal', '')
+        ville = job.get("ville", "Non spécifié")
+        code_postal = job.get("code_postal", "")
         location = f"{ville} ({code_postal})" if code_postal else ville
-        contrat = job.get('type_contrat', 'Non spécifié')
-        score = job.get('similarity_score', 0)
-        
-        st.markdown(f"""
+        contrat = job.get("type_contrat", "Non spécifié")
+        score = job.get("similarity_score", 0)
+
+        st.markdown(
+            f"""
         <div class="badge-container">
             <span class="badge badge-location">📍 {location}</span>
             <span class="badge badge-contract">📋 {contrat}</span>
             <span class="badge badge-score">⭐ {score}%</span>
         </div>
-        """, unsafe_allow_html=True)
-        
+        """,
+            unsafe_allow_html=True,
+        )
+
         # Description
-        description = job.get('description', '')
+        description = job.get("description", "")
         if len(description) > 250:
-            description = description[:250] + '...'
-        st.markdown(f'<div class="job-description">{description}</div>', unsafe_allow_html=True)
-        
+            description = description[:250] + "..."
+        st.markdown(
+            f'<div class="job-description">{description}</div>', unsafe_allow_html=True
+        )
+
         # Compétences
-        hard_skills = job.get('hard_skills', '')
+        hard_skills = job.get("hard_skills", "")
         if hard_skills:
-            st.markdown(f"""
+            st.markdown(
+                f"""
             <div class="skills-section">
                 <div class="skills-label">Compétences requises</div>
                 <div class="skills-text">{hard_skills}</div>
             </div>
-            """, unsafe_allow_html=True)
-        
-        st.markdown('</div>', unsafe_allow_html=True)
+            """,
+                unsafe_allow_html=True,
+            )
+
+        st.markdown("</div>", unsafe_allow_html=True)
+
 
 # Chargement modèle
-with st.spinner('🤖 Chargement du modèle IA...'):
+with st.spinner("🤖 Chargement du modèle IA..."):
     model = load_model()
 
 # Sidebar - Paramètres
 with st.sidebar:
     st.markdown("### ⚙️ Paramètres de recherche")
-    
+
     villes, contrats = get_filter_options()
-    
-    ville_filter = st.selectbox(
-        "📍 Localisation",
-        ["Toutes"] + villes,
-        index=0
-    )
-    
-    contrat_filter = st.selectbox(
-        "📋 Type de contrat",
-        ["Tous"] + contrats,
-        index=0
-    )
-    
+
+    ville_filter = st.selectbox("📍 Localisation", ["Toutes"] + villes, index=0)
+
+    contrat_filter = st.selectbox("📋 Type de contrat", ["Tous"] + contrats, index=0)
+
     top_k = st.slider(
-        "📊 Nombre de résultats",
-        min_value=10,
-        max_value=100,
-        value=50,
-        step=10
+        "📊 Nombre de résultats", min_value=10, max_value=100, value=50, step=10
     )
-    
+
     st.markdown("---")
     st.markdown("### 💡 Conseils")
-    st.info("""
+    st.info(
+        """
     **Exemples de recherches:**
     
     ✅ Data Analyst CDI à Paris
@@ -391,13 +428,14 @@ with st.sidebar:
     ✅ ML engineer expérimenté
     
     ✅ Alternance data science Lyon
-    """)
+    """
+    )
 
 # Zone de recherche
 query = st.text_input(
     "",
     placeholder="Ex: Data Scientist avec Python et Machine Learning à Lyon...",
-    label_visibility="collapsed"
+    label_visibility="collapsed",
 )
 
 col1, col2, col3 = st.columns([1, 2, 1])
@@ -406,60 +444,56 @@ with col2:
 
 # Exécution de la recherche
 if search_button and query:
-    with st.spinner('🔎 Recherche en cours...'):
+    with st.spinner("🔎 Recherche en cours..."):
         query_embedding = model.encode(query, convert_to_numpy=True)
         results = semantic_search(
             query_embedding=query_embedding,
             top_k=top_k,
             ville_filter=ville_filter if ville_filter != "Toutes" else None,
-            contrat_filter=contrat_filter if contrat_filter != "Tous" else None
+            contrat_filter=contrat_filter if contrat_filter != "Tous" else None,
         )
-    
+
     if len(results) > 0:
         # Statistiques
         st.markdown("<br>", unsafe_allow_html=True)
         metric_cols = st.columns(2)
-        
+
         with metric_cols[0]:
-            st.metric(
-                label="📊 Offres trouvées",
-                value=f"{len(results)}",
-                delta=None
-            )
-        
+            st.metric(label="📊 Offres trouvées", value=f"{len(results)}", delta=None)
+
         with metric_cols[1]:
-            avg_score = results['similarity_score'].mean()
+            avg_score = results["similarity_score"].mean()
             st.metric(
-                label="⭐ Pertinence moyenne",
-                value=f"{avg_score:.1f}%",
-                delta=None
+                label="⭐ Pertinence moyenne", value=f"{avg_score:.1f}%", delta=None
             )
-        
+
         st.markdown("---")
         st.markdown("### 🎯 Résultats")
-        
+
         # Affichage des résultats en grille (2 colonnes)
         for i in range(0, len(results), 2):
             cols = st.columns(2)
-            
+
             # Première carte
             with cols[0]:
                 if i < len(results):
                     job = results.iloc[i].to_dict()
                     render_job_card_native(job)
-            
+
             # Deuxième carte
             with cols[1]:
                 if i + 1 < len(results):
                     job = results.iloc[i + 1].to_dict()
                     render_job_card_native(job)
-            
+
             # Espacement entre les lignes
             if i + 2 < len(results):
                 st.markdown("<br>", unsafe_allow_html=True)
-    
+
     else:
-        st.warning("⚠️ Aucun résultat trouvé. Essayez avec des termes différents ou ajustez les filtres.")
+        st.warning(
+            "⚠️ Aucun résultat trouvé. Essayez avec des termes différents ou ajustez les filtres."
+        )
 
 elif search_button and not query:
     st.error("❌ Veuillez entrer une requête de recherche.")
@@ -472,5 +506,5 @@ st.markdown(
     "Powered by <strong>MotherDuck</strong> × <strong>Sentence Transformers</strong> | "
     "RUCHE Team © 2026"
     "</div>",
-    unsafe_allow_html=True
+    unsafe_allow_html=True,
 )
