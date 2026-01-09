@@ -19,7 +19,7 @@ def main():
         "umap_z": umap_coords[:, 2],
     })
 
-    con = duckdb.connect(MOTHERDUCK_DATABASE)
+    con = duckdb.connect(md:job_market_RUCHE_final)
 
     con.execute("DROP TABLE IF EXISTS job_clusters")
     con.execute("""

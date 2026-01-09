@@ -3,7 +3,7 @@ import itertools
 import pandas as pd
 from collections import Counter
 
-con = duckdb.connect("md:jobs_db")
+con = duckdb.connect("md:job_market_RUCHE_final")
 
 df = con.execute("""
     SELECT job_id, hard_skills
