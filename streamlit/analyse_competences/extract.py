@@ -3,7 +3,7 @@ import pandas as pd
 from streamlit.config import MOTHERDUCK_DATABASE
 
 def load_jobs():
-    con = duckdb.connect(MOTHERDUCK_DATABASE)
+    con = duckdb.connect(md:job_market_RUCHE_final)
 
     query = """
     SELECT
