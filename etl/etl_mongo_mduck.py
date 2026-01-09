@@ -849,7 +849,6 @@ def create_star_schema_ddl(con: duckdb.DuckDBPyConnection) -> None:
         is_duplicate BOOLEAN DEFAULT FALSE,
         similarity_score DOUBLE,
         FOREIGN KEY (id_ville) REFERENCES d_localisation(id_ville),
-        FOREIGN KEY (id_region) REFERENCES h_region(id_region),
         FOREIGN KEY (id_contrat) REFERENCES d_contrat(id_contrat),
         FOREIGN KEY (id_date_publication) REFERENCES d_date(id_date),
         FOREIGN KEY (id_date_deadline) REFERENCES d_date(id_date)
