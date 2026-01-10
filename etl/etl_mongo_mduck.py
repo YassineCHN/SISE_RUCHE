@@ -13,16 +13,15 @@ Updates:
 
 import os
 import re
+import json
 import warnings
-from datetime import datetime
+from datetime import date
 from typing import Dict, List, Optional, Any, Tuple
-from collections import Counter, defaultdict
+from collections import defaultdict
+from pathlib import Path
 
 import pandas as pd
 import numpy as np
-import matplotlib.pyplot as plt
-from scipy import stats
-import seaborn as sns
 from dotenv import load_dotenv
 
 # Stopwords
@@ -46,13 +45,24 @@ from config_etl import MOTHERDUCK_DATABASE
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 from tfidf_ml_data_filter import filter_data_jobs_ml
-from scipy.sparse import csr_matrix
 
 # D_localisation
 from clean_localisation import extract_city_from_location
 from clean_salary import standardize_salary_column
 from geolocation_enrichment import GeoRefFranceV2, COMPLETE_REGION_MAPPING
 import time
+
+from etl_utils import (
+    normalize_company_name,
+    normalize_education_level,
+    normalize_start_date,
+    normalize_publication_date,
+    normalize_contract_type,
+    extract_contract_duration_months,
+    force_list,
+    serialize_list,
+)
+
 
 # Configuration
 warnings.filterwarnings("ignore")
@@ -63,7 +73,11 @@ load_dotenv()
 # ============================================================================
 
 # MongoDB Configuration
-MONGO_URI = os.getenv("MONGO_URI")
+ENV = os.getenv("ENV", "dev")
+if ENV == "dev":
+    MONGO_URI = "mongodb://localhost:27017"
+else:
+    MONGO_URI = os.getenv("MONGO_URI")
 DATABASE_NAME = "RUCHE_datalake"
 
 # Configuration MotherDuck
@@ -73,7 +87,7 @@ MOTHERDUCK_TOKEN = os.getenv("MOTHERDUCK_TOKEN")
 COLLECTIONS = ["apec_raw", "francetravail_raw", "servicepublic_raw", "jobteaser_raw"]
 
 # Testing limit (set to None for full dataset)
-LIMIT = 250
+LIMIT = None  
 # NLP duplicate detection threshold
 SIMILARITY_THRESHOLD = 0.9
 
@@ -98,56 +112,120 @@ FRENCH_STOPWORDS = list(stopwords.words("french"))
 # Mapping complet département -> région pour toute la France
 COMPLETE_REGION_MAPPING = {
     # Île-de-France
-    "75": ("Île-de-France", "11"),"77": ("Île-de-France", "11"), "78": ("Île-de-France", "11"), 
-    "91": ("Île-de-France", "11"), "92": ("Île-de-France", "11"), "93": ("Île-de-France", "11"),
-    "94": ("Île-de-France", "11"),"95": ("Île-de-France", "11"),
+    "75": ("Île-de-France", "11"),
+    "77": ("Île-de-France", "11"),
+    "78": ("Île-de-France", "11"),
+    "91": ("Île-de-France", "11"),
+    "92": ("Île-de-France", "11"),
+    "93": ("Île-de-France", "11"),
+    "94": ("Île-de-France", "11"),
+    "95": ("Île-de-France", "11"),
     # Auvergne-Rhône-Alpes
-    "01": ("Auvergne-Rhône-Alpes", "84"), "03": ("Auvergne-Rhône-Alpes", "84"), "07": ("Auvergne-Rhône-Alpes", "84"),
-    "15": ("Auvergne-Rhône-Alpes", "84"), "26": ("Auvergne-Rhône-Alpes", "84"), "38": ("Auvergne-Rhône-Alpes", "84"),
-    "42": ("Auvergne-Rhône-Alpes", "84"), "43": ("Auvergne-Rhône-Alpes", "84"), "63": ("Auvergne-Rhône-Alpes", "84"),
-    "69": ("Auvergne-Rhône-Alpes", "84"), "73": ("Auvergne-Rhône-Alpes", "84"), "74": ("Auvergne-Rhône-Alpes", "84"),
+    "01": ("Auvergne-Rhône-Alpes", "84"),
+    "03": ("Auvergne-Rhône-Alpes", "84"),
+    "07": ("Auvergne-Rhône-Alpes", "84"),
+    "15": ("Auvergne-Rhône-Alpes", "84"),
+    "26": ("Auvergne-Rhône-Alpes", "84"),
+    "38": ("Auvergne-Rhône-Alpes", "84"),
+    "42": ("Auvergne-Rhône-Alpes", "84"),
+    "43": ("Auvergne-Rhône-Alpes", "84"),
+    "63": ("Auvergne-Rhône-Alpes", "84"),
+    "69": ("Auvergne-Rhône-Alpes", "84"),
+    "73": ("Auvergne-Rhône-Alpes", "84"),
+    "74": ("Auvergne-Rhône-Alpes", "84"),
     # Provence-Alpes-Côte d'Azur
-    "04": ("Provence-Alpes-Côte d'Azur", "93"), "05": ("Provence-Alpes-Côte d'Azur", "93"), "06": ("Provence-Alpes-Côte d'Azur", "93"),
-    "13": ("Provence-Alpes-Côte d'Azur", "93"), "83": ("Provence-Alpes-Côte d'Azur", "93"), "84": ("Provence-Alpes-Côte d'Azur", "93"),
+    "04": ("Provence-Alpes-Côte d'Azur", "93"),
+    "05": ("Provence-Alpes-Côte d'Azur", "93"),
+    "06": ("Provence-Alpes-Côte d'Azur", "93"),
+    "13": ("Provence-Alpes-Côte d'Azur", "93"),
+    "83": ("Provence-Alpes-Côte d'Azur", "93"),
+    "84": ("Provence-Alpes-Côte d'Azur", "93"),
     # Nouvelle-Aquitaine
-    "16": ("Nouvelle-Aquitaine", "75"), "17": ("Nouvelle-Aquitaine", "75"), "19": ("Nouvelle-Aquitaine", "75"),
-    "23": ("Nouvelle-Aquitaine", "75"), "24": ("Nouvelle-Aquitaine", "75"), "33": ("Nouvelle-Aquitaine", "75"),
-    "40": ("Nouvelle-Aquitaine", "75"), "47": ("Nouvelle-Aquitaine", "75"), "64": ("Nouvelle-Aquitaine", "75"),
-    "79": ("Nouvelle-Aquitaine", "75"), "86": ("Nouvelle-Aquitaine", "75"), "87": ("Nouvelle-Aquitaine", "75"),
+    "16": ("Nouvelle-Aquitaine", "75"),
+    "17": ("Nouvelle-Aquitaine", "75"),
+    "19": ("Nouvelle-Aquitaine", "75"),
+    "23": ("Nouvelle-Aquitaine", "75"),
+    "24": ("Nouvelle-Aquitaine", "75"),
+    "33": ("Nouvelle-Aquitaine", "75"),
+    "40": ("Nouvelle-Aquitaine", "75"),
+    "47": ("Nouvelle-Aquitaine", "75"),
+    "64": ("Nouvelle-Aquitaine", "75"),
+    "79": ("Nouvelle-Aquitaine", "75"),
+    "86": ("Nouvelle-Aquitaine", "75"),
+    "87": ("Nouvelle-Aquitaine", "75"),
     # Occitanie
-    "09": ("Occitanie", "76"), "11": ("Occitanie", "76"), "12": ("Occitanie", "76"), "30": ("Occitanie", "76"),
-    "31": ("Occitanie", "76"), "32": ("Occitanie", "76"), "34": ("Occitanie", "76"), "46": ("Occitanie", "76"),
-    "48": ("Occitanie", "76"), "65": ("Occitanie", "76"), "66": ("Occitanie", "76"), "81": ("Occitanie", "76"), "82": ("Occitanie", "76"),
+    "09": ("Occitanie", "76"),
+    "11": ("Occitanie", "76"),
+    "12": ("Occitanie", "76"),
+    "30": ("Occitanie", "76"),
+    "31": ("Occitanie", "76"),
+    "32": ("Occitanie", "76"),
+    "34": ("Occitanie", "76"),
+    "46": ("Occitanie", "76"),
+    "48": ("Occitanie", "76"),
+    "65": ("Occitanie", "76"),
+    "66": ("Occitanie", "76"),
+    "81": ("Occitanie", "76"),
+    "82": ("Occitanie", "76"),
     # Hauts-de-France
-    "02": ("Hauts-de-France", "32"), "59": ("Hauts-de-France", "32"), "60": ("Hauts-de-France", "32"),
-    "62": ("Hauts-de-France", "32"), "80": ("Hauts-de-France", "32"),
+    "02": ("Hauts-de-France", "32"),
+    "59": ("Hauts-de-France", "32"),
+    "60": ("Hauts-de-France", "32"),
+    "62": ("Hauts-de-France", "32"),
+    "80": ("Hauts-de-France", "32"),
     # Grand Est
-    "08": ("Grand Est", "44"), "10": ("Grand Est", "44"), "51": ("Grand Est", "44"), "52": ("Grand Est", "44"),
-    "54": ("Grand Est", "44"), "55": ("Grand Est", "44"), "57": ("Grand Est", "44"), "67": ("Grand Est", "44"),
-    "68": ("Grand Est", "44"), "88": ("Grand Est", "44"),
+    "08": ("Grand Est", "44"),
+    "10": ("Grand Est", "44"),
+    "51": ("Grand Est", "44"),
+    "52": ("Grand Est", "44"),
+    "54": ("Grand Est", "44"),
+    "55": ("Grand Est", "44"),
+    "57": ("Grand Est", "44"),
+    "67": ("Grand Est", "44"),
+    "68": ("Grand Est", "44"),
+    "88": ("Grand Est", "44"),
     # Bretagne
-    "22": ("Bretagne", "53"), "29": ("Bretagne", "53"), "35": ("Bretagne", "53"), "56": ("Bretagne", "53"),
+    "22": ("Bretagne", "53"),
+    "29": ("Bretagne", "53"),
+    "35": ("Bretagne", "53"),
+    "56": ("Bretagne", "53"),
     # Pays de la Loire
-    "44": ("Pays de la Loire", "52"), "49": ("Pays de la Loire", "52"), "53": ("Pays de la Loire", "52"),
-    "72": ("Pays de la Loire", "52"), "85": ("Pays de la Loire", "52"),
+    "44": ("Pays de la Loire", "52"),
+    "49": ("Pays de la Loire", "52"),
+    "53": ("Pays de la Loire", "52"),
+    "72": ("Pays de la Loire", "52"),
+    "85": ("Pays de la Loire", "52"),
     # Normandie
-    "14": ("Normandie", "28"), "27": ("Normandie", "28"), "50": ("Normandie", "28"),
-    "61": ("Normandie", "28"), "76": ("Normandie", "28"),
+    "14": ("Normandie", "28"),
+    "27": ("Normandie", "28"),
+    "50": ("Normandie", "28"),
+    "61": ("Normandie", "28"),
+    "76": ("Normandie", "28"),
     # Bourgogne-Franche-Comté
-    "21": ("Bourgogne-Franche-Comté", "27"), "25": ("Bourgogne-Franche-Comté", "27"), "39": ("Bourgogne-Franche-Comté", "27"),
-    "58": ("Bourgogne-Franche-Comté", "27"), "70": ("Bourgogne-Franche-Comté", "27"), "71": ("Bourgogne-Franche-Comté", "27"),
-    "89": ("Bourgogne-Franche-Comté", "27"), "90": ("Bourgogne-Franche-Comté", "27"),
+    "21": ("Bourgogne-Franche-Comté", "27"),
+    "25": ("Bourgogne-Franche-Comté", "27"),
+    "39": ("Bourgogne-Franche-Comté", "27"),
+    "58": ("Bourgogne-Franche-Comté", "27"),
+    "70": ("Bourgogne-Franche-Comté", "27"),
+    "71": ("Bourgogne-Franche-Comté", "27"),
+    "89": ("Bourgogne-Franche-Comté", "27"),
+    "90": ("Bourgogne-Franche-Comté", "27"),
     # Centre-Val de Loire
-    "18": ("Centre-Val de Loire", "24"), "28": ("Centre-Val de Loire", "24"),
-    "36": ("Centre-Val de Loire", "24"), "37": ("Centre-Val de Loire", "24"),
-    "41": ("Centre-Val de Loire", "24"), "45": ("Centre-Val de Loire", "24"),
+    "18": ("Centre-Val de Loire", "24"),
+    "28": ("Centre-Val de Loire", "24"),
+    "36": ("Centre-Val de Loire", "24"),
+    "37": ("Centre-Val de Loire", "24"),
+    "41": ("Centre-Val de Loire", "24"),
+    "45": ("Centre-Val de Loire", "24"),
     # Corse
-    "2A": ("Corse", "94"),"2B": ("Corse", "94"),
+    "2A": ("Corse", "94"),
+    "2B": ("Corse", "94"),
 }
 
 # ============================================================================
 # PHASE 1: ETL PIPELINE - EXTRACTION & HARMONIZATION (MONGODB)
 # ============================================================================
+
 
 def connect_mongodb(
     uri: str = MONGO_URI, db_name: str = DATABASE_NAME
@@ -180,6 +258,7 @@ def extract_collection(
         print("  Extracted: {} (full)".format(len(documents)))
 
     return documents
+
 
 def extract_all_collections(limit: Optional[int] = LIMIT) -> Dict[str, List[Dict]]:
     """Extract all collections from MongoDB"""
@@ -404,6 +483,11 @@ def harmonize_document(doc: Dict, collection_name: str) -> Dict:
     return harmonizer(doc)
 
 
+
+
+
+
+
 def harmonize_all_data(raw_data: Dict[str, List[Dict]]) -> pd.DataFrame:
     """Harmonize all documents from all collections"""
     print("=" * 80)
@@ -495,28 +579,34 @@ def detect_duplicates_nlp(
     try:
         tfidf_matrix = vectorizer.fit_transform(descriptions[non_empty])
         print("  Matrix shape: {}".format(tfidf_matrix.shape))
-        print("  Sparsity: {:.1f}%".format((1 - tfidf_matrix.nnz / np.prod(tfidf_matrix.shape)) * 100))
+        print(
+            "  Sparsity: {:.1f}%".format(
+                (1 - tfidf_matrix.nnz / np.prod(tfidf_matrix.shape)) * 100
+            )
+        )
     except Exception as e:
         print("  Vectorization failed: {}".format(e))
-        df['is_duplicate'] = False
-        df['duplicate_group_id'] = None
-        df['similarity_score'] = 0.0
+        df["is_duplicate"] = False
+        df["duplicate_group_id"] = None
+        df["similarity_score"] = 0.0
         return df
-    
-    print("STEP 4.3: Computing pairwise similarities (threshold: {})...".format(threshold))
-    
+
+    print(
+        "STEP 4.3: Computing pairwise similarities (threshold: {})...".format(threshold)
+    )
+
     n_docs = tfidf_matrix.shape[0]
     duplicates_found = []
-    
+
     similarity_matrix = cosine_similarity(tfidf_matrix, tfidf_matrix)
-    
+
     for i in range(n_docs):
         for j in range(i + 1, n_docs):
             if similarity_matrix[i, j] >= threshold:
                 duplicates_found.append((i, j, similarity_matrix[i, j]))
-    
+
     print("  Found {} similar pairs".format(len(duplicates_found)))
-    
+
     print("STEP 4.4: Assigning duplicate groups...")
 
     df_work["is_duplicate"] = False
@@ -572,21 +662,35 @@ def create_unified_dataset(limit: Optional[int] = LIMIT) -> pd.DataFrame:
     """Complete ETL pipeline: Extract + Harmonize + Detect Duplicates"""
     raw_data = extract_all_collections(limit)
     df = harmonize_all_data(raw_data)
+    print("🔍 DEBUG hard_skills types")
+    sample = df[["source_platform", "hard_skills"]].dropna().head(20)
+    for _, row in sample.iterrows():
+        print(row["source_platform"], type(row["hard_skills"]), row["hard_skills"])
+
+    # Nettoyage minimal obligatoire
+    df = df.replace("", np.nan)
     perform_eda(df)
-    df = detect_duplicates_nlp(df, threshold=SIMILARITY_THRESHOLD)
+    # df = detect_duplicates_nlp(df, threshold=SIMILARITY_THRESHOLD)
+    df["is_duplicate"] = False
+    df["similarity_score"] = 0.0
 
     print(f"✓ ETL Complete: {df.shape}\n")
     return df
+
 
 # ============================================================================
 # PHASE 2: DATA CLEANING & STANDARDIZATION
 # ============================================================================
 
 
-def visualize_duplicates(df, output_heatmap=OUTPUT_VISUALIZATION, output_xlsx=OUTPUT_DUPLICATES_XLSX):
+def visualize_duplicates(
+    df, output_heatmap=OUTPUT_VISUALIZATION, output_xlsx=OUTPUT_DUPLICATES_XLSX
+):
     """Create heatmap visualization and export duplicates"""
     print("STEP 5.1: Duplicate visualization and export")
     pass
+
+
 def filter_data_jobs(df):
     """Filter to keep only genuine data-related jobs - ML ENHANCED"""
     print("STEP 6.4: Data job filtering (ML-based)")
@@ -599,7 +703,7 @@ def clean_job_data(df: pd.DataFrame, output_file: str = OUTPUT_CLEANED) -> pd.Da
     print("PHASE 5: DATA CLEANING PIPELINE - START")
     print("=" * 80)
     print("Initial records: {}".format(len(df)))
-    
+
     visualize_duplicates(df)
     df = filter_data_jobs(df)
     df = standardize_salary_column(df, salary_col='salary')
@@ -608,20 +712,35 @@ def clean_job_data(df: pd.DataFrame, output_file: str = OUTPUT_CLEANED) -> pd.Da
     print("=" * 80)
     print("PHASE 6: EXPORTING CLEANED DATA")
     print("=" * 80)
-    
-    df.to_excel(output_file, index=False, engine='openpyxl')
+
+    df.to_excel(output_file, index=False, engine="openpyxl")
     print("STEP 6.12: Cleaned data exported to: {}".format(output_file))
     print("  Final records: {}".format(len(df)))
-    
+
     print("=" * 80)
     print("DATA CLEANING PIPELINE - COMPLETE")
     print("=" * 80)
-    
+
     return df
+
 
 # ============================================================================
 # PHASE 3: STAR SCHEMA MODELING - MOTHERDUCK/DUCKDB
 # ============================================================================
+
+
+def connect_duckdb_local():
+    # Chemin racine du projet (SISE_RUCHE)
+    project_root = Path(__file__).resolve().parents[1]
+
+    # data/local.duckdb au niveau racine
+    duckdb_path = project_root / "data" / "local.duckdb"
+
+    # Créer le dossier data si absent
+    duckdb_path.parent.mkdir(parents=True, exist_ok=True)
+
+    print(f"✓ Using local DuckDB: {duckdb_path}")
+    return duckdb.connect(str(duckdb_path))
 
 
 def connect_motherduck(
@@ -646,7 +765,7 @@ def connect_motherduck(
 
     except Exception as e:
         print("WARNING: MotherDuck connection failed: {}".format(e))
-        local_db = "Job_Analyses_RUCHE_v2.duckdb" # Milena
+        local_db = "Job_Analyses_RUCHE_v2.duckdb"  # Milena
         con = duckdb.connect(local_db)
         print("✓ Using local DuckDB\n")
         return con
@@ -738,15 +857,7 @@ def create_star_schema_ddl(con: duckdb.DuckDBPyConnection) -> None:
     ddl_d_contrat = """
     CREATE OR REPLACE TABLE d_contrat (
         id_contrat INTEGER PRIMARY KEY,
-        type_contrat TEXT NOT NULL,
-        is_cdi BOOLEAN DEFAULT FALSE,
-        is_cdd BOOLEAN DEFAULT FALSE,
-        is_interim BOOLEAN DEFAULT FALSE,
-        is_stage BOOLEAN DEFAULT FALSE,
-        is_apprentissage BOOLEAN DEFAULT FALSE,
-        is_freelance BOOLEAN DEFAULT FALSE,
-        duree_mois INTEGER,
-        description_contrat TEXT
+        type_contrat TEXT NOT NULL
     );
     """
     con.execute(ddl_d_contrat)
@@ -772,25 +883,22 @@ def create_star_schema_ddl(con: duckdb.DuckDBPyConnection) -> None:
         experience_required TEXT,
         id_ville INTEGER,
         id_contrat INTEGER,
+        duree_contrat_mois INTEGER,
         id_date_publication INTEGER,
-        id_date_deadline INTEGER,
+        start_date TEXT,
         is_teletravail BOOLEAN DEFAULT FALSE,
-        avantages TEXT,
         salaire TEXT,
         hard_skills TEXT,
         soft_skills TEXT,
         langages TEXT,
         education_level TEXT,
         job_function TEXT,
-        sector TEXT,
         job_grade TEXT,
-        driving_license BOOLEAN DEFAULT FALSE,
         is_duplicate BOOLEAN DEFAULT FALSE,
         similarity_score DOUBLE,
         FOREIGN KEY (id_ville) REFERENCES d_localisation(id_ville),
         FOREIGN KEY (id_contrat) REFERENCES d_contrat(id_contrat),
-        FOREIGN KEY (id_date_publication) REFERENCES d_date(id_date),
-        FOREIGN KEY (id_date_deadline) REFERENCES d_date(id_date)
+        FOREIGN KEY (id_date_publication) REFERENCES d_date(id_date)
     );
     """
 
@@ -929,19 +1037,69 @@ def populate_dimension_tables(df: pd.DataFrame, con: duckdb.DuckDBPyConnection) 
 
             time.sleep(1)  # Rate limiting
 
-        except Exception as e:
-            errors += 1
-            location_data.append(
-                {
-                    "id_ville": idx,
-                    "ville": ville_clean,
-                    "code_postal": "00",
-                    "departement": "00",
-                    "latitude": None,
-                    "longitude": None,
-                    "id_region": 0,
-                }
+    except Exception as e:
+        errors += 1
+        location_data.append(
+            {
+                "id_ville": idx,
+                "ville": ville_clean,
+                "code_postal": "00",
+                "departement": "00",
+                "latitude": None,
+                "longitude": None,
+                "id_region": 0,
+            }
+        )
+
+    location_data = [
+        {
+            "id_ville": 0,
+            "ville": "UNKNOWN",
+            "code_postal": None,
+            "departement": None,
+            "latitude": None,
+            "longitude": None,
+            "id_region": 0,
+        }
+    ]
+    for idx, row in enumerate(locations.itertuples(), 1):
+        ville_clean = locations.loc[row.Index, "ville_clean"]
+
+        if ville_clean == "UNKNOWN":
+            continue
+
+        # Déterminer la région uniquement à partir du département déjà présent si possible
+        dept = None
+        id_region = 0
+
+        if "department" in df.columns:
+            dept = (
+                df[df["location"] == row.location]["department"]
+                .dropna()
+                .astype(str)
+                .head(1)
             )
+            dept = dept.iloc[0] if not dept.empty else None
+
+            if dept in COMPLETE_REGION_MAPPING:
+                region_name, _ = COMPLETE_REGION_MAPPING[dept]
+                region_row = df_regions[df_regions["nom_region"] == region_name]
+                if not region_row.empty:
+                    id_region = int(region_row.iloc[0]["id_region"])
+
+        location_data.append(
+            {
+                "id_ville": idx,
+                "ville": ville_clean,
+                "code_postal": dept,
+                "departement": dept,
+                "latitude": None,
+                "longitude": None,
+                "id_region": id_region,
+            }
+        )
+    enriched = 0
+    errors = 0
 
     df_locations = pd.DataFrame(location_data)
 
@@ -963,7 +1121,7 @@ def populate_dimension_tables(df: pd.DataFrame, con: duckdb.DuckDBPyConnection) 
 
     print("STEP 8.3: Populating d_date...")
 
-    dates_series = pd.to_datetime(df["publication_date"], errors="coerce").dropna()
+    dates_series = pd.Series(df["publication_date"]).dropna()
     from datetime import date as dt_date
 
     date_data = [
@@ -1019,53 +1177,21 @@ def populate_dimension_tables(df: pd.DataFrame, con: duckdb.DuckDBPyConnection) 
     # ========================================================================
 
     print("STEP 8.4: Populating d_contrat...")
-
-    contract_types = (
-        df["contract_type"].fillna("UNKNOWN").replace("", "UNKNOWN").unique()
-    )
-
+    # Dimension contrat NORMALISÉE (6 valeurs max)
     contract_data = [
-        {
-            "id_contrat": 0,
-            "type_contrat": "UNKNOWN",
-            "is_cdi": False,
-            "is_cdd": False,
-            "is_interim": False,
-            "is_stage": False,
-            "is_apprentissage": False,
-            "is_freelance": False,
-            "duree_mois": None,
-            "description_contrat": "Type de contrat non renseigné",
-        }
+        {"id_contrat": 0, "type_contrat": "AUTRE"},
+        {"id_contrat": 1, "type_contrat": "CDI"},
+        {"id_contrat": 2, "type_contrat": "CDD"},
+        {"id_contrat": 3, "type_contrat": "STAGE"},
+        {"id_contrat": 4, "type_contrat": "ALTERNANCE"},
+        {"id_contrat": 5, "type_contrat": "INTERIM"},
+        {"id_contrat": 6, "type_contrat": "CONTRAT_PUBLIC"},
     ]
-
-    for idx, contract in enumerate(contract_types, 1):
-        if contract == "UNKNOWN":
-            continue
-
-        contract_str = str(contract).upper()
-
-        contract_data.append(
-            {
-                "id_contrat": idx,
-                "type_contrat": contract,
-                "is_cdi": "CDI" in contract_str,
-                "is_cdd": "CDD" in contract_str,
-                "is_interim": "INTERIM" in contract_str or "INTÉRIM" in contract_str,
-                "is_stage": "STAGE" in contract_str,
-                "is_apprentissage": "APPRENTISSAGE" in contract_str,
-                "is_freelance": "FREELANCE" in contract_str
-                or "INDÉPENDANT" in contract_str,
-                "duree_mois": None,
-                "description_contrat": contract,
-            }
-        )
-
     df_contracts = pd.DataFrame(contract_data)
     con.execute("DELETE FROM d_contrat")
     con.execute("INSERT INTO d_contrat SELECT * FROM df_contracts")
     stats["d_contrat"] = len(df_contracts)
-    print("  ✅ Inserted {} contract types\n".format(len(df_contracts)))
+    print(f"  ✅ Inserted {len(df_contracts)} normalized contract types\n")
 
     # ========================================================================
     # SUMMARY
@@ -1080,6 +1206,8 @@ def populate_dimension_tables(df: pd.DataFrame, con: duckdb.DuckDBPyConnection) 
     return stats
 
 
+
+
 def populate_fact_table(
     df: pd.DataFrame, con: duckdb.DuckDBPyConnection
 ) -> Tuple[int, Dict[str, int]]:
@@ -1089,15 +1217,6 @@ def populate_fact_table(
     print("=" * 80)
 
     print("STEP 10.1: Preparing fact table data...")
-    
-    def safe_list_to_str(value):
-        """Convert list/array to string safely"""
-        if value is None or (isinstance(value, float) and pd.isna(value)):
-            return ""
-        if isinstance(value, (list, tuple)):
-            return ", ".join(str(v) for v in value if v)
-        return str(value)
-
 
     # Get dimension mappings
     df_locations = con.execute("SELECT * FROM d_localisation").fetchdf()
@@ -1117,7 +1236,13 @@ def populate_fact_table(
     contract_map[None] = 0
 
     # Create date mapping (date -> id_date)
-    date_map = df_dates.set_index("date_complete")["id_date"].to_dict()
+    date_map = {}
+    for _, row in df_dates.iterrows():
+        d = row["date_complete"]
+        # d peut être datetime64, Timestamp ou date
+        if pd.notna(d):
+            d_key = pd.to_datetime(d).date().isoformat()  # ← CLÉ UNIQUE
+            date_map[d_key] = int(row["id_date"])
     date_map[None] = 0
 
     print(" v Loaded {} location mappings".format(len(location_map)))
@@ -1141,25 +1266,25 @@ def populate_fact_table(
 
     for idx, row in df.iterrows():
         # Map location
-        location_raw = row['location']
-        if pd.isna(location_raw) or location_raw == '':
-            ville_clean = 'UNKNOWN'
-            validation_stats['missing_location'] += 1
+        location_raw = row["location"]
+        if pd.isna(location_raw) or location_raw == "":
+            ville_clean = "UNKNOWN"
+            validation_stats["missing_location"] += 1
         else:
             # Nettoyer la ville avec la même fonction que pour d_localisation
             ville_clean = extract_city_from_location(location_raw)
-            if ville_clean == 'UNKNOWN':
-                validation_stats['missing_location'] += 1
+            if ville_clean == "UNKNOWN":
+                validation_stats["missing_location"] += 1
             else:
-                validation_stats['valid_location'] += 1
-        
+                validation_stats["valid_location"] += 1
+
         # Mapper avec la ville nettoyée
         id_ville = location_map.get(ville_clean, 0)
 
         # Map contract
-        contract_value = row["contract_type"]
+        contract_value = row["type_contrat_normalise"]
         if pd.isna(contract_value) or contract_value == "":
-            contract_value = "UNKNOWN"
+            contract_value = "AUTRE"
             validation_stats["missing_contract"] += 1
         else:
             validation_stats["valid_contract"] += 1
@@ -1167,30 +1292,16 @@ def populate_fact_table(
         id_contrat = contract_map.get(contract_value, 0)
 
         # Map publication date
-        try:
-            if pd.notna(row["publication_date"]):
-                pub_date = pd.to_datetime(row["publication_date"]).date()
-                id_date_publication = date_map.get(pub_date, 0)
-                if id_date_publication != 0:
-                    validation_stats["valid_pub_date"] += 1
-                else:
-                    validation_stats["invalid_pub_date"] += 1
-            else:
-                id_date_publication = 0
-                validation_stats["invalid_pub_date"] += 1
-        except:
-            id_date_publication = 0
+        pub_date = row["publication_date"]
+        if pub_date is not None:
+            pub_date_key = pub_date.isoformat()  # YYYY-MM-DD
+        else:
+            pub_date_key = None
+        id_date_publication = date_map.get(pub_date_key, 0)
+        if id_date_publication != 0:
+            validation_stats["valid_pub_date"] += 1
+        else:
             validation_stats["invalid_pub_date"] += 1
-
-        # Map deadline date
-        try:
-            if pd.notna(row["application_deadline"]):
-                deadline_date = pd.to_datetime(row["application_deadline"]).date()
-                id_date_deadline = date_map.get(deadline_date, 0)
-            else:
-                id_date_deadline = 0
-        except:
-            id_date_deadline = 0
 
         # Experience years
         try:
@@ -1206,26 +1317,22 @@ def populate_fact_table(
             nb_annees_exp = None
 
         # CORRECTION: Convert skills using helper function
-        hard_skills_text = safe_list_to_str(row.get("hard_skills"))
-        soft_skills_text = safe_list_to_str(row.get("soft_skills"))
-        languages_text = safe_list_to_str(row.get("languages"))
+        hard_skills_text = serialize_list(force_list(row["hard_skills"]))
+        soft_skills_text = serialize_list(force_list(row["soft_skills"]))
+        languages_text = serialize_list(force_list(row["languages"]))
 
         # Remote work boolean
         remote_value = str(row.get("remote_work", "")).lower()
-        is_teletravail = remote_value in ["oui", "yes", "true", "partiel", "total", "hybride", "full remote", "distanciel", "télétravail"]
-
-        # Driving license boolean
-        driving_value = str(row.get("driving_license", "")).lower()
-        has_driving_license = driving_value in [
-            "yes",
+        is_teletravail = remote_value in [
             "oui",
+            "yes",
             "true",
-            "permis b",
-            "permi b",
-            "permis de conduire",
-            "permis",
-            "permis voiture",
-            "permis auto",
+            "partiel",
+            "total",
+            "hybride",
+            "full remote",
+            "distanciel",
+            "télétravail",
         ]
 
         fact_data.append(
@@ -1246,19 +1353,17 @@ def populate_fact_table(
                 "experience_required": row["experience_required"],
                 "id_ville": id_ville,
                 "id_contrat": id_contrat,
+                "duree_contrat_mois": row["duree_contrat_mois"],
                 "id_date_publication": id_date_publication,
-                "id_date_deadline": id_date_deadline,
+                "start_date": row.get("start_date"),
                 "is_teletravail": is_teletravail,
-                "avantages": row.get("benefits", ""),
-                "salaire": row.get("salaire", "Non spécifié"), 
+                "salaire": row.get("salaire", "Non spécifié"),
                 "hard_skills": hard_skills_text,
                 "soft_skills": soft_skills_text,
                 "langages": languages_text,
                 "education_level": row.get("education_level", ""),
                 "job_function": row.get("job_function", ""),
-                "sector": row.get("sector", ""),
                 "job_grade": row.get("job_grade", ""),
-                "driving_license": has_driving_license,
                 "is_duplicate": row.get("is_duplicate", False),
                 "similarity_score": row.get("similarity_score", 0.0),
             }
@@ -1294,6 +1399,8 @@ def populate_fact_table(
     print(" Verified: {} records in f_offre".format(count))
 
     return count, validation_stats
+
+
 
 def run_data_quality_checks(con: duckdb.DuckDBPyConnection) -> None:
     """
@@ -1425,13 +1532,14 @@ def main():
     print("=" * 80)
     print("PHASE 2: DATA CLEANING")
     print("=" * 80)
-    
+
     try:
         df_cleaned = clean_job_data(df_raw, output_file=OUTPUT_CLEANED)
-        
+
     except Exception as e:
         print("Cleaning failed: {}".format(e))
         import traceback
+
         traceback.print_exc()
         return df_raw
 
@@ -1441,7 +1549,30 @@ def main():
     print("=" * 80)
     con = None
     try:
-        con = connect_motherduck()
+        if ENV == "dev":
+            con = connect_duckdb_local()
+        else:
+            con = connect_motherduck()
+
+        df_cleaned["publication_date"] = df_cleaned["publication_date"].apply(
+            normalize_publication_date
+        )
+
+        df_cleaned["type_contrat_normalise"] = df_cleaned["contract_type"].apply(
+            normalize_contract_type
+        )
+        df_cleaned["duree_contrat_mois"] = df_cleaned["contract_type"].apply(
+            extract_contract_duration_months
+        )
+
+        df_cleaned["start_date"] = df_cleaned["start_date"].apply(normalize_start_date)
+        df_cleaned["education_level"] = df_cleaned["education_level"].apply(
+            normalize_education_level
+        )
+        df_cleaned["company_name"] = df_cleaned["company_name"].apply(
+            normalize_company_name
+        )
+
         create_star_schema_ddl(con)
         populate_dimension_tables(df_cleaned, con)
         populate_fact_table(df_cleaned, con)
