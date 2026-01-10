@@ -501,6 +501,39 @@ def extract_contract_duration_months(value: str) -> Optional[int]:
     return None
 
 
+def normalize_education_level(value: str) -> str:
+    """
+    Normalize education_level to a small controlled vocabulary.
+    Rule: keep the highest level mentioned.
+    """
+    if value is None:
+        return "UNKNOWN"
+
+    v = str(value).strip().lower()
+
+    if v == "" or v in {"nan", "none"}:
+        return "UNKNOWN"
+
+    # Aucun prérequis
+    if "pas de niveau" in v or "aucun" in v:
+        return "AUCUN_PREREQUIS"
+
+    # Ordre IMPORTANT : du plus élevé au plus bas
+    if any(k in v for k in ["bac+5", "master", "msc", "grande ecole", "grande école"]):
+        return "BAC+5"
+
+    if any(k in v for k in ["bac+4", "bac+3", "licence", "bachelor"]):
+        return "BAC+3"
+
+    if any(k in v for k in ["bac+2", "bts", "dut"]):
+        return "BAC+2"
+
+    if "bac" in v:
+        return "BAC"
+
+    return "UNKNOWN"
+
+
 def normalize_contract_type(value: str) -> str:
     """
     Normalize raw contract type into 6 categories.
@@ -1773,6 +1806,12 @@ def main():
         df_cleaned["start_date"] = df_cleaned["start_date"].apply(normalize_start_date)
         print("   → start_date distribution:")
         print(df_cleaned["start_date"].value_counts(dropna=False).head(20))
+        print("\n🔧 Normalizing education_level...")
+        df_cleaned["education_level"] = df_cleaned["education_level"].apply(
+            normalize_education_level
+        )
+        print("   → education_level distribution:")
+        print(df_cleaned["education_level"].value_counts())
 
         create_star_schema_ddl(con)
         populate_dimension_tables(df_cleaned, con)
