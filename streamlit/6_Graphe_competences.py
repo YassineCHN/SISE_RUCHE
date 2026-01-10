@@ -68,7 +68,7 @@ if st.sidebar.button("🔄 Réinitialiser les filtres", use_container_width=True
 # DATA
 # ------------------------
 @st.cache_data
-def load_skills(con, limit, contract_filters=None, date_filter='Toutes', region_filter='Toutes'):
+def load_skills(con, limit, contract_filter='Tous', date_filter='Toutes', region_filter='Toutes'):
     
     query=f"""
         SELECT hard_skills
