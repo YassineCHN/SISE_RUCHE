@@ -101,22 +101,14 @@ def load_skills(con, limit, contract_filters=None, date_filter='Toutes', region_
     df = con.execute(query).df()
     con.close()
     return df
-# Préparer les filtres
-contract_filters = {
-    'cdi': filter_cdi,
-    'cdd': filter_cdd,
-    'stage': filter_stage,
-    'alternance': filter_alternance,
-    'freelance': filter_freelance,
-    'interim': filter_interim
-}
 
 # -----------------------------------
 # CREATION DU DATAFRAME
 # -----------------------------------
 df = load_skills(limit, 
-                 contract_filters=contract_filters if any(contract_filters.values()) else None, 
-                 date_filter=date_filter, region_filter=region_filter 
+                 contract_filteront=concract_filter, 
+                 date_filter=date_filter, 
+                 region_filter=region_filter 
                  )
 
 # ------------------------
