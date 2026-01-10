@@ -15,16 +15,13 @@ import os
 import re
 import json
 import warnings
-from datetime import datetime, date
+from datetime import date
 from typing import Dict, List, Optional, Any, Tuple
-from collections import Counter, defaultdict
+from collections import defaultdict
 from pathlib import Path
 
 import pandas as pd
 import numpy as np
-import matplotlib.pyplot as plt
-from scipy import stats
-import seaborn as sns
 from dotenv import load_dotenv
 
 # Stopwords
@@ -48,12 +45,23 @@ from config_etl import MOTHERDUCK_DATABASE
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 from tfidf_ml_data_filter import filter_data_jobs_ml
-from scipy.sparse import csr_matrix
 
 # D_localisation
 from clean_localisation import extract_city_from_location
 from geolocation_enrichment import GeoRefFranceV2, COMPLETE_REGION_MAPPING
 import time
+
+from etl_utils import (
+    normalize_company_name,
+    normalize_education_level,
+    normalize_start_date,
+    normalize_publication_date,
+    normalize_contract_type,
+    extract_contract_duration_months,
+    force_list,
+    serialize_list,
+)
+
 
 # Configuration
 warnings.filterwarnings("ignore")
@@ -78,7 +86,7 @@ MOTHERDUCK_TOKEN = os.getenv("MOTHERDUCK_TOKEN")
 COLLECTIONS = ["apec_raw", "francetravail_raw", "servicepublic_raw", "jobteaser_raw"]
 
 # Testing limit (set to None for full dataset)
-LIMIT = None  # Remettre à None une fois validé
+LIMIT = None  
 # NLP duplicate detection threshold
 SIMILARITY_THRESHOLD = 0.9
 
@@ -474,233 +482,9 @@ def harmonize_document(doc: Dict, collection_name: str) -> Dict:
     return harmonizer(doc)
 
 
-def extract_contract_duration_months(value: str) -> Optional[int]:
-    """
-    Extract contract duration in months from raw text.
-    Returns None if not found or ambiguous.
-    """
-    if not value:
-        return None
-
-    v = value.lower()
-
-    # Cas explicite CDI → pas de durée
-    if "cdi" in v or "indéterminée" in v:
-        return None
-
-    # Exemples : "6 mois", "12 mois", "18 mois"
-    m = re.search(r"(\d{1,2})\s*(mois)", v)
-    if m:
-        return int(m.group(1))
-
-    # Exemples : "1 an", "2 ans"
-    m = re.search(r"(\d{1,2})\s*(an|ans)", v)
-    if m:
-        return int(m.group(1)) * 12
-
-    # Cas flous : renouvelable, permanent, etc.
-    return None
 
 
-LEGAL_FORMS = [" SA", " SAS", " SASU", " SARL", " EURL", " GIE", " SE"]
 
-
-def normalize_company_name(value: str) -> str:
-    if value is None:
-        return "UNKNOWN"
-
-    v = str(value).strip()
-
-    if v == "":
-        return "UNKNOWN"
-
-    # Normalisation espaces
-    v = re.sub(r"\s+", " ", v)
-
-    # Uppercase pour stabilité analytique
-    v = v.upper()
-
-    # Suppression formes juridiques UNIQUEMENT en fin
-    for form in LEGAL_FORMS:
-        if v.endswith(form):
-            v = v[: -len(form)].strip()
-
-    # Nettoyage ponctuation finale
-    v = re.sub(r"[,\-–]+$", "", v).strip()
-
-    return v
-
-
-def normalize_education_level(value: str) -> str:
-    """
-    Normalize education_level to a small controlled vocabulary.
-    Rule: keep the highest level mentioned.
-    """
-    if value is None:
-        return "UNKNOWN"
-
-    v = str(value).strip().lower()
-
-    if v == "" or v in {"nan", "none"}:
-        return "UNKNOWN"
-
-    # Aucun prérequis
-    if "pas de niveau" in v or "aucun" in v:
-        return "AUCUN_PREREQUIS"
-
-    # Ordre IMPORTANT : du plus élevé au plus bas
-    if any(k in v for k in ["bac+5", "master", "msc", "grande ecole", "grande école"]):
-        return "BAC+5"
-
-    if any(k in v for k in ["bac+4", "bac+3", "licence", "bachelor"]):
-        return "BAC+3"
-
-    if any(k in v for k in ["bac+2", "bts", "dut"]):
-        return "BAC+2"
-
-    if "bac" in v:
-        return "BAC"
-
-    return "UNKNOWN"
-
-
-def normalize_contract_type(value: str) -> str:
-    """
-    Normalize raw contract type into 6 categories.
-    """
-    if not value:
-        return "AUTRE"
-
-    v = value.lower()
-
-    if "cdi" in v or "indéterminée" in v:
-        return "CDI"
-
-    if "alternance" in v or "apprentissage" in v:
-        return "ALTERNANCE"
-
-    if "stage" in v:
-        return "STAGE"
-
-    if "intérim" in v or "interim" in v:
-        return "INTERIM"
-
-    if "cdd" in v or "durée déterminée" in v:
-        return "CDD"
-
-    if (
-        "titulaire" in v
-        or "contractuel" in v
-        or "fonction publique" in v
-        or "fonctionnaire" in v
-        or "emploi public" in v
-        or "territoriale" in v
-        or "hospitalière" in v
-        or "hospitalier" in v
-    ):
-        return "CONTRAT_PUBLIC"
-
-    return "AUTRE"
-
-
-FRENCH_MONTHS = {
-    1: "Janvier",
-    2: "Février",
-    3: "Mars",
-    4: "Avril",
-    5: "Mai",
-    6: "Juin",
-    7: "Juillet",
-    8: "Août",
-    9: "Septembre",
-    10: "Octobre",
-    11: "Novembre",
-    12: "Décembre",
-}
-
-
-def normalize_start_date(value) -> Optional[str]:
-    """
-    Normalize start_date into:
-    - 'Mois Année'
-    - 'DÈS QUE POSSIBLE'
-    - NULL
-    """
-    if value is None:
-        return None
-
-    v = str(value).strip()
-
-    if v == "" or v.lower() in {"nan", "none"}:
-        return None
-
-    v_lower = v.lower()
-
-    # ASAP / immédiat
-    if any(
-        k in v_lower for k in ["dès que", "des que", "asap", "immédiat", "immediat"]
-    ):
-        return "DÈS QUE POSSIBLE"
-
-    # Date exacte → Mois Année
-    try:
-        parsed = pd.to_datetime(v, errors="coerce", dayfirst=True)
-        if pd.notna(parsed):
-            return f"{FRENCH_MONTHS[parsed.month]} {parsed.year}"
-    except Exception:
-        pass
-
-    # Mois Année déjà présent (Mars 2026, etc.)
-    match = re.search(r"([A-Za-zéûôîà]+)\s+(\d{4})", v)
-    if match:
-        month, year = match.groups()
-        return f"{month.capitalize()} {year}"
-
-    return None
-
-
-def normalize_generic_date(value) -> Optional[date]:
-    """
-    Normalize any date field to datetime.date or None
-    """
-    if value is None:
-        return None
-
-    if isinstance(value, pd.Timestamp):
-        return value.date()
-
-    value = str(value).strip()
-
-    if value == "" or value.lower() in {"nan", "none"}:
-        return None
-
-    try:
-        parsed = pd.to_datetime(value, errors="coerce")
-        return parsed.date() if pd.notna(parsed) else None
-    except Exception:
-        return None
-
-
-def normalize_publication_date(value) -> Optional[date]:
-    """
-    Normalize publication_date to datetime.date or None
-    """
-    if value is None:
-        return None
-
-    if isinstance(value, pd.Timestamp):
-        return value.date()
-
-    value = str(value).strip()
-
-    if value == "" or value.lower() in {"nan", "none"}:
-        return None
-
-    try:
-        parsed = pd.to_datetime(value, errors="coerce")
-        return parsed.date() if pd.notna(parsed) else None
-    except Exception:
-        return None
 
 
 def harmonize_all_data(raw_data: Dict[str, List[Dict]]) -> pd.DataFrame:
@@ -1179,91 +963,91 @@ def populate_dimension_tables(df: pd.DataFrame, con: duckdb.DuckDBPyConnection) 
     # Géocoder avec API
     print("  → Geocoding with API (this may take 10-20 minutes)...\n")
 
-    # geo_api = GeoRefFranceV2()
-    # location_data = [
-    #     {
-    #         "id_ville": 0,
-    #         "ville": "UNKNOWN",
-    #         "code_postal": "00",
-    #         "departement": "00",
-    #         "latitude": None,
-    #         "longitude": None,
-    #         "id_region": 0,
-    #     }
-    # ]
+    geo_api = GeoRefFranceV2()
+    location_data = [
+        {
+            "id_ville": 0,
+            "ville": "UNKNOWN",
+            "code_postal": "00",
+            "departement": "00",
+            "latitude": None,
+            "longitude": None,
+            "id_region": 0,
+        }
+    ]
 
-    # enriched = 0
-    # errors = 0
+    enriched = 0
+    errors = 0
 
-    # for idx, row in enumerate(locations.itertuples(), 1):
-    #     ville_clean = locations.loc[row.Index, "ville_clean"]
+    for idx, row in enumerate(locations.itertuples(), 1):
+        ville_clean = locations.loc[row.Index, "ville_clean"]
 
-    #     if idx % 50 == 0:
-    #         print(
-    #             "    Progress: {}/{} ({:.1f}%)".format(
-    #                 idx, len(locations), idx / len(locations) * 100
-    #             )
-    #         )
+        if idx % 50 == 0:
+            print(
+                "    Progress: {}/{} ({:.1f}%)".format(
+                    idx, len(locations), idx / len(locations) * 100
+                )
+            )
 
-    #     if ville_clean == "UNKNOWN":
-    #         continue
+        if ville_clean == "UNKNOWN":
+            continue
 
-    #     try:
-    #         # Géocodage API
-    #         result = geo_api.get_full_location_info(ville_clean)
+        try:
+            # Géocodage API
+            result = geo_api.get_full_location_info(ville_clean)
 
-    #         if result:
-    #             lat, lon, dept_api = result
+            if result:
+                lat, lon, dept_api = result
 
-    #             # Trouver id_region (h_region existe déjà)
-    #             id_region = 0
-    #             if dept_api in COMPLETE_REGION_MAPPING:
-    #                 region_name, _ = COMPLETE_REGION_MAPPING[dept_api]
-    #                 region_row = df_regions[df_regions["nom_region"] == region_name]
-    #                 if not region_row.empty:
-    #                     id_region = int(region_row.iloc[0]["id_region"])
+                # Trouver id_region (h_region existe déjà)
+                id_region = 0
+                if dept_api in COMPLETE_REGION_MAPPING:
+                    region_name, _ = COMPLETE_REGION_MAPPING[dept_api]
+                    region_row = df_regions[df_regions["nom_region"] == region_name]
+                    if not region_row.empty:
+                        id_region = int(region_row.iloc[0]["id_region"])
 
-    #             location_data.append(
-    #                 {
-    #                     "id_ville": idx,
-    #                     "ville": ville_clean,
-    #                     "code_postal": dept_api,
-    #                     "departement": dept_api,  # ← Depuis API
-    #                     "latitude": lat,
-    #                     "longitude": lon,
-    #                     "id_region": id_region,  # ← Trouvé via MAPPING
-    #                 }
-    #             )
-    #             enriched += 1
-    #         else:
-    #             location_data.append(
-    #                 {
-    #                     "id_ville": idx,
-    #                     "ville": ville_clean,
-    #                     "code_postal": "00",
-    #                     "departement": "00",
-    #                     "latitude": None,
-    #                     "longitude": None,
-    #                     "id_region": 0,
-    #                 }
-    #             )
-    #             errors += 1
+                location_data.append(
+                    {
+                        "id_ville": idx,
+                        "ville": ville_clean,
+                        "code_postal": dept_api,
+                        "departement": dept_api,  # ← Depuis API
+                        "latitude": lat,
+                        "longitude": lon,
+                        "id_region": id_region,  # ← Trouvé via MAPPING
+                    }
+                )
+                enriched += 1
+            else:
+                location_data.append(
+                    {
+                        "id_ville": idx,
+                        "ville": ville_clean,
+                        "code_postal": "00",
+                        "departement": "00",
+                        "latitude": None,
+                        "longitude": None,
+                        "id_region": 0,
+                    }
+                )
+                errors += 1
 
-    #         time.sleep(1)  # Rate limiting
+            time.sleep(1)  # Rate limiting
 
-    # except Exception as e:
-    #     errors += 1
-    #     location_data.append(
-    #         {
-    #             "id_ville": idx,
-    #             "ville": ville_clean,
-    #             "code_postal": "00",
-    #             "departement": "00",
-    #             "latitude": None,
-    #             "longitude": None,
-    #             "id_region": 0,
-    #         }
-    #     )
+    except Exception as e:
+        errors += 1
+        location_data.append(
+            {
+                "id_ville": idx,
+                "ville": ville_clean,
+                "code_postal": "00",
+                "departement": "00",
+                "latitude": None,
+                "longitude": None,
+                "id_region": 0,
+            }
+        )
 
     location_data = [
         {
@@ -1420,17 +1204,6 @@ def populate_dimension_tables(df: pd.DataFrame, con: duckdb.DuckDBPyConnection) 
     return stats
 
 
-def force_list(value):
-    """
-    Ensure value is always a list.
-    """
-    if value is None or (isinstance(value, float) and pd.isna(value)):
-        return []
-    if isinstance(value, list):
-        return value
-    if isinstance(value, tuple):
-        return list(value)
-    return [value]
 
 
 def populate_fact_table(
@@ -1442,14 +1215,6 @@ def populate_fact_table(
     print("=" * 80)
 
     print("STEP 10.1: Preparing fact table data...")
-
-    def safe_list_to_str(value):
-        if value is None or (isinstance(value, float) and pd.isna(value)):
-            return None
-        if isinstance(value, (list, tuple)):
-            clean = [str(v).strip() for v in value if v and str(v).strip()]
-            return " | ".join(clean) if clean else None
-        return str(value).strip()
 
     # Get dimension mappings
     df_locations = con.execute("SELECT * FROM d_localisation").fetchdf()
@@ -1634,21 +1399,6 @@ def populate_fact_table(
     return count, validation_stats
 
 
-def serialize_list(value):
-    """
-    Serialize list-like values into JSON string.
-    Preserve structure even in TEXT column.
-    """
-    if value is None or (isinstance(value, float) and pd.isna(value)):
-        return None
-
-    if isinstance(value, (list, tuple)):
-        clean = [str(v).strip() for v in value if v and str(v).strip()]
-        return json.dumps(clean, ensure_ascii=False) if clean else None
-
-    # Si c'est déjà une string (ex: soft_skills déjà aplati)
-    return json.dumps([value.strip()], ensure_ascii=False)
-
 
 def run_data_quality_checks(con: duckdb.DuckDBPyConnection) -> None:
     """
@@ -1802,53 +1552,24 @@ def main():
         else:
             con = connect_motherduck()
 
-        print("\n🔧 Normalizing publication_date BEFORE star schema...")
         df_cleaned["publication_date"] = df_cleaned["publication_date"].apply(
             normalize_publication_date
         )
-        valid_dates = df_cleaned["publication_date"].notna().sum()
-        print(
-            f"   → Valid publication_date after normalization: {valid_dates}/{len(df_cleaned)}"
-        )
 
-        print("\n🔧 Normalizing contract types and extracting duration...")
         df_cleaned["type_contrat_normalise"] = df_cleaned["contract_type"].apply(
             normalize_contract_type
         )
         df_cleaned["duree_contrat_mois"] = df_cleaned["contract_type"].apply(
             extract_contract_duration_months
         )
-        print("   → Contract type distribution (normalized):")
-        print(df_cleaned["type_contrat_normalise"].value_counts())
-        print("\n🔍 AUDIT CONTRACTS → AUTRE")
-        df_autre = df_cleaned[df_cleaned["type_contrat_normalise"] == "AUTRE"]
-        print(f"Nombre d'offres classées AUTRE: {len(df_autre)}")
-        print("\nTop 30 valeurs brutes de contract_type dans AUTRE:")
-        print(df_autre["contract_type"].fillna("NULL").value_counts().head(30))
-        print("\n🔍 AUTRE avec durée détectée (potentiel mauvais classement)")
-        df_autre_duree = df_autre[df_autre["duree_contrat_mois"].notna()]
-        print(f"Nombre d'offres AUTRE avec durée: {len(df_autre_duree)}")
-        print(
-            df_autre_duree[["contract_type", "duree_contrat_mois", "source_platform"]]
-            .value_counts()
-            .head(30)
-        )
-        print("\n🔧 Normalizing start_date (semantic)...")
+
         df_cleaned["start_date"] = df_cleaned["start_date"].apply(normalize_start_date)
-        print("   → start_date distribution:")
-        print(df_cleaned["start_date"].value_counts(dropna=False).head(20))
-        print("\n🔧 Normalizing education_level...")
         df_cleaned["education_level"] = df_cleaned["education_level"].apply(
             normalize_education_level
         )
-        print("   → education_level distribution:")
-        print(df_cleaned["education_level"].value_counts())
-        print("\n🔧 Normalizing company_name (in place)...")
         df_cleaned["company_name"] = df_cleaned["company_name"].apply(
             normalize_company_name
         )
-        print("→ company_name distribution (top 20):")
-        print(df_cleaned["company_name"].value_counts().head(20))
 
         create_star_schema_ddl(con)
         populate_dimension_tables(df_cleaned, con)
