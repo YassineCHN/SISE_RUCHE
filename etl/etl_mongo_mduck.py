@@ -501,6 +501,35 @@ def extract_contract_duration_months(value: str) -> Optional[int]:
     return None
 
 
+LEGAL_FORMS = [" SA", " SAS", " SASU", " SARL", " EURL", " GIE", " SE"]
+
+
+def normalize_company_name(value: str) -> str:
+    if value is None:
+        return "UNKNOWN"
+
+    v = str(value).strip()
+
+    if v == "":
+        return "UNKNOWN"
+
+    # Normalisation espaces
+    v = re.sub(r"\s+", " ", v)
+
+    # Uppercase pour stabilité analytique
+    v = v.upper()
+
+    # Suppression formes juridiques UNIQUEMENT en fin
+    for form in LEGAL_FORMS:
+        if v.endswith(form):
+            v = v[: -len(form)].strip()
+
+    # Nettoyage ponctuation finale
+    v = re.sub(r"[,\-–]+$", "", v).strip()
+
+    return v
+
+
 def normalize_education_level(value: str) -> str:
     """
     Normalize education_level to a small controlled vocabulary.
@@ -1812,6 +1841,12 @@ def main():
         )
         print("   → education_level distribution:")
         print(df_cleaned["education_level"].value_counts())
+        print("\n🔧 Normalizing company_name (in place)...")
+        df_cleaned["company_name"] = df_cleaned["company_name"].apply(
+            normalize_company_name
+        )
+        print("→ company_name distribution (top 20):")
+        print(df_cleaned["company_name"].value_counts().head(20))
 
         create_star_schema_ddl(con)
         populate_dimension_tables(df_cleaned, con)
