@@ -23,58 +23,82 @@ st.markdown("""
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
     html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
     [data-testid="stSidebar"] { background: linear-gradient(180deg, #f8f9fa 0%, #e9ecef 100%); }
-    .search-header {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        padding: 2.5rem; border-radius: 16px; margin-bottom: 2rem;
-        box-shadow: 0 10px 40px rgba(102, 126, 234, 0.2);
-    }
-    .search-header h1 { color: white; font-size: 2.5rem; font-weight: 700; margin: 0; text-align: center; }
-    .search-header p { color: rgba(255, 255, 255, 0.9); font-size: 1.1rem; text-align: center; margin: 0.5rem 0 0 0; }
     
-    /* Search bar enhanced */
+    /* Header épuré */
+    .search-header {
+        background: #f5f7fa;
+        padding: 4rem 2rem;
+        border-radius: 16px;
+        margin-bottom: 2rem;
+        text-align: center;
+    }
+    .search-header h1 { 
+        color: #5a67d8;
+        font-size: 3rem;
+        font-weight: 600;
+        margin: 0 0 1rem 0;
+        letter-spacing: -0.5px;
+    }
+    .search-header p {
+        color: #4a5568;
+        font-size: 1.1rem;
+        margin: 0;
+        font-weight: 400;
+        max-width: 700px;
+        margin: 0 auto;
+        line-height: 1.6;
+    }
+    
+    /* Search bar avec bordure dorée */
     .search-container {
-        position: relative;
-        max-width: 900px;
-        margin: 2rem auto;
+        max-width: 750px;
+        margin: 2rem auto 1.5rem auto;
     }
     .stTextInput > div > div > input {
-        border: 3px solid #667eea !important;
+        border: 3px solid #f6ad55 !important;
         border-radius: 50px !important;
-        padding: 1.2rem 3rem 1.2rem 4rem !important;
-        font-size: 1.15rem !important;
+        padding: 1.3rem 2rem !important;
+        font-size: 1.05rem !important;
         transition: all 0.3s ease !important;
-        box-shadow: 0 8px 24px rgba(102, 126, 234, 0.15) !important;
+        box-shadow: 0 4px 12px rgba(246, 173, 85, 0.2) !important;
         background: white !important;
     }
     .stTextInput > div > div > input:focus {
-        border-color: #764ba2 !important;
-        box-shadow: 0 12px 32px rgba(102, 126, 234, 0.25) !important;
-        transform: translateY(-2px);
+        border-color: #ed8936 !important;
+        box-shadow: 0 6px 16px rgba(246, 173, 85, 0.3) !important;
     }
     .stTextInput > div > div > input::placeholder {
-        color: #a0aec0;
+        color: #cbd5e0;
         font-weight: 400;
     }
     
+    /* Bouton bleu */
     .stButton > button {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        color: white; border: none; border-radius: 50px; padding: 1.2rem 3rem;
-        font-size: 1.15rem; font-weight: 600; transition: all 0.3s ease;
-        box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+        background: #4c51bf;
+        color: white;
+        border: none;
+        border-radius: 50px;
+        padding: 1rem 2.5rem;
+        font-size: 1.05rem;
+        font-weight: 600;
+        transition: all 0.3s ease;
+        box-shadow: 0 4px 14px rgba(76, 81, 191, 0.4);
     }
     .stButton > button:hover { 
-        transform: translateY(-3px); 
-        box-shadow: 0 10px 28px rgba(102, 126, 234, 0.5);
+        background: #5a67d8;
+        transform: translateY(-2px);
+        box-shadow: 0 6px 18px rgba(76, 81, 191, 0.5);
     }
-    [data-testid="stMetricValue"] { font-size: 2rem; font-weight: 700; color: #667eea; }
+    
+    [data-testid="stMetricValue"] { font-size: 2rem; font-weight: 700; color: #5a67d8; }
     .job-card {
         background: white; border-radius: 16px; padding: 1.75rem; border: 1px solid #e9ecef;
         box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05); transition: all 0.3s ease; height: 100%;
     }
-    .job-card:hover { transform: translateY(-4px); box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1); border-color: #667eea; }
+    .job-card:hover { transform: translateY(-4px); box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1); border-color: #5a67d8; }
     .job-title { font-size: 1.35rem; font-weight: 700; color: #1a202c; margin-bottom: 0.5rem; line-height: 1.3; }
     .job-title a { color: #1a202c; text-decoration: none; }
-    .job-title a:hover { color: #667eea; text-decoration: underline; }
+    .job-title a:hover { color: #5a67d8; text-decoration: underline; }
     .job-company { font-size: 1rem; color: #718096; font-weight: 500; margin-bottom: 1rem; }
     .badge-container { display: flex; gap: 0.5rem; flex-wrap: wrap; margin: 1rem 0; }
     .badge { display: inline-block; padding: 0.4rem 0.9rem; border-radius: 8px; font-size: 0.85rem; font-weight: 600; }
@@ -88,25 +112,13 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-st.markdown("<h1 style='text-align: center;'><b></b></h1>", unsafe_allow_html=True)
 st.sidebar.image("./static/Logo3.png", width=150)
 st.sidebar.markdown("# Home page")
 
-with st.container(horizontal=True):
-    col1, col2 = st.columns(2)
-    with col1:
-        left = st.container(horizontal_alignment="center", border=False)
-        left.markdown("<h3 style='text-align: center;'>Une application de recherche d'emploi data/ia <br/>et d'analyse du marché</h3>", unsafe_allow_html=True)
-        left.image("./static/Logo3.png", width=210, caption="")
-    with col2:
-        right = st.container(horizontal_alignment="center", border=False)
-        right.markdown("<h3 style='text-align: center;'>Architecture</h3>", unsafe_allow_html=True)
-        right.image("./static/architecture.png", width="stretch", caption="")
-
-st.divider()
 st.markdown("""
 <div class="search-header">
-    <h1>Trouvez le job de vos rêves dans le domaine de la data et de l'intelligence artificielle</h1>
+    <h1>Trouvez votre futur job Data & IA</h1>
+    <p>Le moteur de recherche sémantique intelligent qui comprend votre langage,<br>pas juste vos mots-clés.</p>
 </div>
 """, unsafe_allow_html=True)
 
@@ -240,7 +252,7 @@ with st.sidebar:
         "🎯 Score minimum de pertinence (%)",
         min_value=0,
         max_value=100,
-        value=0,
+        value=70,
         step=5,
         help="Filtrer les offres ayant un score de similarité supérieur ou égal à ce seuil"
     )
@@ -249,19 +261,19 @@ with st.sidebar:
     
     st.markdown("---")
     st.markdown("### 💡 Conseils de recherche")
-    st.info("**Exemples de requêtes :**\n\n⚙ Data Analyst CDI Paris\n\n⚙ Stage Java/Spark\n\n⚙ ML engineer expérimenté\n\n⚙ Alternance data science Lyon")
+    st.info("⚙ Data Analyst CDI Paris\n\n⚙ Stage Java/Spark\n\n⚙ ML engineer expérimenté\n\n⚙ Alternance data science Lyon")
 
 st.markdown('<div class="search-container">', unsafe_allow_html=True)
 query = st.text_input(
     "",
-    placeholder="🔎  Ex: Data Scientist Python et Machine Learning à Lyon...",
+    placeholder="Ex: Data Scientist Junior NLP à Lyon...",
     label_visibility="collapsed"
 )
 st.markdown('</div>', unsafe_allow_html=True)
 
-col1, col2, col3 = st.columns([1, 1, 1])
-with col2:
-    search_button = st.button("🚀 Lancer la recherche", use_container_width=True)
+col1, col2, col3 = st.columns([1, 3, 1])
+with col1:
+    search_button = st.button("Lancer la recherche 🚀", use_container_width=True)
 
 if search_button and query:
     with st.spinner("🔎 Recherche en cours..."):
@@ -304,5 +316,5 @@ elif search_button:
     st.error("❌ Veuillez entrer une requête.")
 
 st.markdown("<br><br>", unsafe_allow_html=True)
-st.divider()
+#st.divider()
 st.markdown("<div style='text-align: center; color: #718096; font-size: 0.9rem;'>Powered by <strong>MotherDuck</strong> × <strong>Sentence Transformers</strong> | RUCHE Team © 2026</div>", unsafe_allow_html=True)
