@@ -77,7 +77,7 @@ MOTHERDUCK_TOKEN = os.getenv("MOTHERDUCK_TOKEN")
 COLLECTIONS = ["apec_raw", "francetravail_raw", "servicepublic_raw", "jobteaser_raw"]
 
 # Testing limit (set to None for full dataset)
-LIMIT = 200  # Remettre à None une fois validé
+LIMIT = None  # Remettre à None une fois validé
 # NLP duplicate detection threshold
 SIMILARITY_THRESHOLD = 0.9
 
@@ -1215,12 +1215,7 @@ def populate_dimension_tables(df: pd.DataFrame, con: duckdb.DuckDBPyConnection) 
 
     print("STEP 8.3: Populating d_date...")
 
-    dates_series = pd.concat(
-        [
-            df["publication_date"],
-            df["application_deadline"],
-        ]
-    ).dropna()
+    dates_series = pd.Series(df["publication_date"]).dropna()
     from datetime import date as dt_date
 
     date_data = [
@@ -1409,12 +1404,14 @@ def populate_fact_table(
             validation_stats["invalid_pub_date"] += 1
 
         # Map deadline date
-        deadline_date = row["application_deadline"]
-        if deadline_date is not None:
-            deadline_key = deadline_date.isoformat()
-        else:
-            deadline_key = None
-        id_date_deadline = date_map.get(deadline_key, 0)
+        try:
+            if pd.notna(row["application_deadline"]):
+                deadline_date = pd.to_datetime(row["application_deadline"]).date()
+                id_date_deadline = date_map.get(deadline_date, 0)
+            else:
+                id_date_deadline = 0
+        except:
+            id_date_deadline = 0
 
         # Experience years
         try:
