@@ -50,6 +50,7 @@ from scipy.sparse import csr_matrix
 
 # D_localisation
 from clean_localisation import extract_city_from_location
+from clean_salary import standardize_salary_column
 from geolocation_enrichment import GeoRefFranceV2, COMPLETE_REGION_MAPPING
 import time
 
@@ -72,7 +73,7 @@ MOTHERDUCK_TOKEN = os.getenv("MOTHERDUCK_TOKEN")
 COLLECTIONS = ["apec_raw", "francetravail_raw", "servicepublic_raw", "jobteaser_raw"]
 
 # Testing limit (set to None for full dataset)
-LIMIT = None
+LIMIT = 250
 # NLP duplicate detection threshold
 SIMILARITY_THRESHOLD = 0.9
 
@@ -97,114 +98,51 @@ FRENCH_STOPWORDS = list(stopwords.words("french"))
 # Mapping complet département -> région pour toute la France
 COMPLETE_REGION_MAPPING = {
     # Île-de-France
-    "75": ("Île-de-France", "11"),
-    "77": ("Île-de-France", "11"),
-    "78": ("Île-de-France", "11"),
-    "91": ("Île-de-France", "11"),
-    "92": ("Île-de-France", "11"),
-    "93": ("Île-de-France", "11"),
-    "94": ("Île-de-France", "11"),
-    "95": ("Île-de-France", "11"),
+    "75": ("Île-de-France", "11"),"77": ("Île-de-France", "11"), "78": ("Île-de-France", "11"), 
+    "91": ("Île-de-France", "11"), "92": ("Île-de-France", "11"), "93": ("Île-de-France", "11"),
+    "94": ("Île-de-France", "11"),"95": ("Île-de-France", "11"),
     # Auvergne-Rhône-Alpes
-    "01": ("Auvergne-Rhône-Alpes", "84"),
-    "03": ("Auvergne-Rhône-Alpes", "84"),
-    "07": ("Auvergne-Rhône-Alpes", "84"),
-    "15": ("Auvergne-Rhône-Alpes", "84"),
-    "26": ("Auvergne-Rhône-Alpes", "84"),
-    "38": ("Auvergne-Rhône-Alpes", "84"),
-    "42": ("Auvergne-Rhône-Alpes", "84"),
-    "43": ("Auvergne-Rhône-Alpes", "84"),
-    "63": ("Auvergne-Rhône-Alpes", "84"),
-    "69": ("Auvergne-Rhône-Alpes", "84"),
-    "73": ("Auvergne-Rhône-Alpes", "84"),
-    "74": ("Auvergne-Rhône-Alpes", "84"),
+    "01": ("Auvergne-Rhône-Alpes", "84"), "03": ("Auvergne-Rhône-Alpes", "84"), "07": ("Auvergne-Rhône-Alpes", "84"),
+    "15": ("Auvergne-Rhône-Alpes", "84"), "26": ("Auvergne-Rhône-Alpes", "84"), "38": ("Auvergne-Rhône-Alpes", "84"),
+    "42": ("Auvergne-Rhône-Alpes", "84"), "43": ("Auvergne-Rhône-Alpes", "84"), "63": ("Auvergne-Rhône-Alpes", "84"),
+    "69": ("Auvergne-Rhône-Alpes", "84"), "73": ("Auvergne-Rhône-Alpes", "84"), "74": ("Auvergne-Rhône-Alpes", "84"),
     # Provence-Alpes-Côte d'Azur
-    "04": ("Provence-Alpes-Côte d'Azur", "93"),
-    "05": ("Provence-Alpes-Côte d'Azur", "93"),
-    "06": ("Provence-Alpes-Côte d'Azur", "93"),
-    "13": ("Provence-Alpes-Côte d'Azur", "93"),
-    "83": ("Provence-Alpes-Côte d'Azur", "93"),
-    "84": ("Provence-Alpes-Côte d'Azur", "93"),
+    "04": ("Provence-Alpes-Côte d'Azur", "93"), "05": ("Provence-Alpes-Côte d'Azur", "93"), "06": ("Provence-Alpes-Côte d'Azur", "93"),
+    "13": ("Provence-Alpes-Côte d'Azur", "93"), "83": ("Provence-Alpes-Côte d'Azur", "93"), "84": ("Provence-Alpes-Côte d'Azur", "93"),
     # Nouvelle-Aquitaine
-    "16": ("Nouvelle-Aquitaine", "75"),
-    "17": ("Nouvelle-Aquitaine", "75"),
-    "19": ("Nouvelle-Aquitaine", "75"),
-    "23": ("Nouvelle-Aquitaine", "75"),
-    "24": ("Nouvelle-Aquitaine", "75"),
-    "33": ("Nouvelle-Aquitaine", "75"),
-    "40": ("Nouvelle-Aquitaine", "75"),
-    "47": ("Nouvelle-Aquitaine", "75"),
-    "64": ("Nouvelle-Aquitaine", "75"),
-    "79": ("Nouvelle-Aquitaine", "75"),
-    "86": ("Nouvelle-Aquitaine", "75"),
-    "87": ("Nouvelle-Aquitaine", "75"),
+    "16": ("Nouvelle-Aquitaine", "75"), "17": ("Nouvelle-Aquitaine", "75"), "19": ("Nouvelle-Aquitaine", "75"),
+    "23": ("Nouvelle-Aquitaine", "75"), "24": ("Nouvelle-Aquitaine", "75"), "33": ("Nouvelle-Aquitaine", "75"),
+    "40": ("Nouvelle-Aquitaine", "75"), "47": ("Nouvelle-Aquitaine", "75"), "64": ("Nouvelle-Aquitaine", "75"),
+    "79": ("Nouvelle-Aquitaine", "75"), "86": ("Nouvelle-Aquitaine", "75"), "87": ("Nouvelle-Aquitaine", "75"),
     # Occitanie
-    "09": ("Occitanie", "76"),
-    "11": ("Occitanie", "76"),
-    "12": ("Occitanie", "76"),
-    "30": ("Occitanie", "76"),
-    "31": ("Occitanie", "76"),
-    "32": ("Occitanie", "76"),
-    "34": ("Occitanie", "76"),
-    "46": ("Occitanie", "76"),
-    "48": ("Occitanie", "76"),
-    "65": ("Occitanie", "76"),
-    "66": ("Occitanie", "76"),
-    "81": ("Occitanie", "76"),
-    "82": ("Occitanie", "76"),
+    "09": ("Occitanie", "76"), "11": ("Occitanie", "76"), "12": ("Occitanie", "76"), "30": ("Occitanie", "76"),
+    "31": ("Occitanie", "76"), "32": ("Occitanie", "76"), "34": ("Occitanie", "76"), "46": ("Occitanie", "76"),
+    "48": ("Occitanie", "76"), "65": ("Occitanie", "76"), "66": ("Occitanie", "76"), "81": ("Occitanie", "76"), "82": ("Occitanie", "76"),
     # Hauts-de-France
-    "02": ("Hauts-de-France", "32"),
-    "59": ("Hauts-de-France", "32"),
-    "60": ("Hauts-de-France", "32"),
-    "62": ("Hauts-de-France", "32"),
-    "80": ("Hauts-de-France", "32"),
+    "02": ("Hauts-de-France", "32"), "59": ("Hauts-de-France", "32"), "60": ("Hauts-de-France", "32"),
+    "62": ("Hauts-de-France", "32"), "80": ("Hauts-de-France", "32"),
     # Grand Est
-    "08": ("Grand Est", "44"),
-    "10": ("Grand Est", "44"),
-    "51": ("Grand Est", "44"),
-    "52": ("Grand Est", "44"),
-    "54": ("Grand Est", "44"),
-    "55": ("Grand Est", "44"),
-    "57": ("Grand Est", "44"),
-    "67": ("Grand Est", "44"),
-    "68": ("Grand Est", "44"),
-    "88": ("Grand Est", "44"),
+    "08": ("Grand Est", "44"), "10": ("Grand Est", "44"), "51": ("Grand Est", "44"), "52": ("Grand Est", "44"),
+    "54": ("Grand Est", "44"), "55": ("Grand Est", "44"), "57": ("Grand Est", "44"), "67": ("Grand Est", "44"),
+    "68": ("Grand Est", "44"), "88": ("Grand Est", "44"),
     # Bretagne
-    "22": ("Bretagne", "53"),
-    "29": ("Bretagne", "53"),
-    "35": ("Bretagne", "53"),
-    "56": ("Bretagne", "53"),
+    "22": ("Bretagne", "53"), "29": ("Bretagne", "53"), "35": ("Bretagne", "53"), "56": ("Bretagne", "53"),
     # Pays de la Loire
-    "44": ("Pays de la Loire", "52"),
-    "49": ("Pays de la Loire", "52"),
-    "53": ("Pays de la Loire", "52"),
-    "72": ("Pays de la Loire", "52"),
-    "85": ("Pays de la Loire", "52"),
+    "44": ("Pays de la Loire", "52"), "49": ("Pays de la Loire", "52"), "53": ("Pays de la Loire", "52"),
+    "72": ("Pays de la Loire", "52"), "85": ("Pays de la Loire", "52"),
     # Normandie
-    "14": ("Normandie", "28"),
-    "27": ("Normandie", "28"),
-    "50": ("Normandie", "28"),
-    "61": ("Normandie", "28"),
-    "76": ("Normandie", "28"),
+    "14": ("Normandie", "28"), "27": ("Normandie", "28"), "50": ("Normandie", "28"),
+    "61": ("Normandie", "28"), "76": ("Normandie", "28"),
     # Bourgogne-Franche-Comté
-    "21": ("Bourgogne-Franche-Comté", "27"),
-    "25": ("Bourgogne-Franche-Comté", "27"),
-    "39": ("Bourgogne-Franche-Comté", "27"),
-    "58": ("Bourgogne-Franche-Comté", "27"),
-    "70": ("Bourgogne-Franche-Comté", "27"),
-    "71": ("Bourgogne-Franche-Comté", "27"),
-    "89": ("Bourgogne-Franche-Comté", "27"),
-    "90": ("Bourgogne-Franche-Comté", "27"),
+    "21": ("Bourgogne-Franche-Comté", "27"), "25": ("Bourgogne-Franche-Comté", "27"), "39": ("Bourgogne-Franche-Comté", "27"),
+    "58": ("Bourgogne-Franche-Comté", "27"), "70": ("Bourgogne-Franche-Comté", "27"), "71": ("Bourgogne-Franche-Comté", "27"),
+    "89": ("Bourgogne-Franche-Comté", "27"), "90": ("Bourgogne-Franche-Comté", "27"),
     # Centre-Val de Loire
-    "18": ("Centre-Val de Loire", "24"),
-    "28": ("Centre-Val de Loire", "24"),
-    "36": ("Centre-Val de Loire", "24"),
-    "37": ("Centre-Val de Loire", "24"),
-    "41": ("Centre-Val de Loire", "24"),
-    "45": ("Centre-Val de Loire", "24"),
+    "18": ("Centre-Val de Loire", "24"), "28": ("Centre-Val de Loire", "24"),
+    "36": ("Centre-Val de Loire", "24"), "37": ("Centre-Val de Loire", "24"),
+    "41": ("Centre-Val de Loire", "24"), "45": ("Centre-Val de Loire", "24"),
     # Corse
-    "2A": ("Corse", "94"),
-    "2B": ("Corse", "94"),
+    "2A": ("Corse", "94"),"2B": ("Corse", "94"),
 }
 
 # ============================================================================
@@ -664,6 +602,7 @@ def clean_job_data(df: pd.DataFrame, output_file: str = OUTPUT_CLEANED) -> pd.Da
     
     visualize_duplicates(df)
     df = filter_data_jobs(df)
+    df = standardize_salary_column(df, salary_col='salary')
 
     # Export to Excel
     print("=" * 80)
@@ -1311,7 +1250,7 @@ def populate_fact_table(
                 "id_date_deadline": id_date_deadline,
                 "is_teletravail": is_teletravail,
                 "avantages": row.get("benefits", ""),
-                "salaire": row.get("salary", ""),
+                "salaire": row.get("salaire", "Non spécifié"), 
                 "hard_skills": hard_skills_text,
                 "soft_skills": soft_skills_text,
                 "langages": languages_text,
