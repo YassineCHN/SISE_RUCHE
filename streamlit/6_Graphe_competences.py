@@ -69,8 +69,8 @@ if st.sidebar.button("🔄 Réinitialiser les filtres", use_container_width=True
 # DATA
 # ------------------------
 @st.cache_data
-def load_skills(limit):
-    con = duckdb.connect(MOTHERDUCK_DATABASE)
+def load_skills(con, limit, contract_filters=None, date_filter='Toutes', region_filter='Toutes'):
+    
     query=f"""
         SELECT hard_skills
         FROM f_offre f
@@ -127,9 +127,12 @@ contract_filters = {
 }
 
 # -----------------------------------
-# CHARGEMENT DES DONNEES ET CALCULS
+# CREATION DU DATAFRAME
 # -----------------------------------
-df = load_skills(contract_filters=contract_filters if any(contract_filters.values()) else None, date_filter, region_filter, limit)
+df = load_skills(limit, 
+                 contract_filters=contract_filters if any(contract_filters.values()) else None, 
+                 date_filter=date_filter, region_filter=region_filter 
+                 )
 
 # ------------------------
 # BUILD GRAPH
