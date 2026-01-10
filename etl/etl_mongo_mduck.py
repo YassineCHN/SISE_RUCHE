@@ -1100,24 +1100,19 @@ def create_star_schema_ddl(con: duckdb.DuckDBPyConnection) -> None:
         duree_contrat_mois INTEGER,
         id_date_publication INTEGER,
         start_date TEXT,
-        id_date_deadline INTEGER,
         is_teletravail BOOLEAN DEFAULT FALSE,
-        avantages TEXT,
         salaire TEXT,
         hard_skills TEXT,
         soft_skills TEXT,
         langages TEXT,
         education_level TEXT,
         job_function TEXT,
-        sector TEXT,
         job_grade TEXT,
-        driving_license BOOLEAN DEFAULT FALSE,
         is_duplicate BOOLEAN DEFAULT FALSE,
         similarity_score DOUBLE,
         FOREIGN KEY (id_ville) REFERENCES d_localisation(id_ville),
         FOREIGN KEY (id_contrat) REFERENCES d_contrat(id_contrat),
-        FOREIGN KEY (id_date_publication) REFERENCES d_date(id_date),
-        FOREIGN KEY (id_date_deadline) REFERENCES d_date(id_date)
+        FOREIGN KEY (id_date_publication) REFERENCES d_date(id_date)
     );
     """
 
@@ -1541,16 +1536,6 @@ def populate_fact_table(
         else:
             validation_stats["invalid_pub_date"] += 1
 
-        # Map deadline date
-        try:
-            if pd.notna(row["application_deadline"]):
-                deadline_date = pd.to_datetime(row["application_deadline"]).date()
-                id_date_deadline = date_map.get(deadline_date, 0)
-            else:
-                id_date_deadline = 0
-        except:
-            id_date_deadline = 0
-
         # Experience years
         try:
             exp_years = row["experience_years"]
@@ -1583,20 +1568,6 @@ def populate_fact_table(
             "télétravail",
         ]
 
-        # Driving license boolean
-        driving_value = str(row.get("driving_license", "")).lower()
-        has_driving_license = driving_value in [
-            "yes",
-            "oui",
-            "true",
-            "permis b",
-            "permi b",
-            "permis de conduire",
-            "permis",
-            "permis voiture",
-            "permis auto",
-        ]
-
         fact_data.append(
             {
                 "job_id": row["job_id"],
@@ -1618,18 +1589,14 @@ def populate_fact_table(
                 "duree_contrat_mois": row["duree_contrat_mois"],
                 "id_date_publication": id_date_publication,
                 "start_date": row.get("start_date"),
-                "id_date_deadline": id_date_deadline,
                 "is_teletravail": is_teletravail,
-                "avantages": row.get("benefits", ""),
                 "salaire": row.get("salary", ""),
                 "hard_skills": hard_skills_text,
                 "soft_skills": soft_skills_text,
                 "langages": languages_text,
                 "education_level": row.get("education_level", ""),
                 "job_function": row.get("job_function", ""),
-                "sector": row.get("sector", ""),
                 "job_grade": row.get("job_grade", ""),
-                "driving_license": has_driving_license,
                 "is_duplicate": row.get("is_duplicate", False),
                 "similarity_score": row.get("similarity_score", 0.0),
             }
