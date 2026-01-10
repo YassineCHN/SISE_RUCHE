@@ -75,7 +75,7 @@ if st.sidebar.button("🔄 Réinitialiser les filtres", use_container_width=True
 # ------------------------
 @st.cache_data
 
-def load_data(con, contract_filters=None, date_filter='Toutes', region_filter='Toutes', limit):
+def load_data(con, limit, contract_filters=None, date_filter='Toutes', region_filter='Toutes'):
     con = duckdb.connect(MOTHERDUCK_DATABASE)
     
     """Charge les données avec filtres appliqués"""
@@ -184,7 +184,7 @@ def label_clusters(df, cluster_col="cluster_id", top_n=3):
 # -----------------------------------
 # CHARGEMENT DES DONNEES ET CALCULS
 # -----------------------------------
-df = load_data(contract_filters=contract_filters if any(contract_filters.values()) else None, date_filter, region_filter, limit)
+df = load_data(limit, contract_filters=contract_filters if any(contract_filters.values()) else None, date_filter=date_filter, region_filter=region_filter)
 
 st.caption(f"📄 {len(df)} offres analysées après filtres")
 df["ml_text"] = df.apply(build_ml_text, axis=1)
