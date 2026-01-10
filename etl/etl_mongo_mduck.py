@@ -13,6 +13,7 @@ Updates:
 
 import os
 import re
+import json
 import warnings
 from datetime import datetime, date
 from typing import Dict, List, Optional, Any, Tuple
@@ -876,6 +877,11 @@ def create_unified_dataset(limit: Optional[int] = LIMIT) -> pd.DataFrame:
     """Complete ETL pipeline: Extract + Harmonize + Detect Duplicates"""
     raw_data = extract_all_collections(limit)
     df = harmonize_all_data(raw_data)
+    print("🔍 DEBUG hard_skills types")
+    sample = df[["source_platform", "hard_skills"]].dropna().head(20)
+    for _, row in sample.iterrows():
+        print(row["source_platform"], type(row["hard_skills"]), row["hard_skills"])
+
     # Nettoyage minimal obligatoire
     df = df.replace("", np.nan)
     perform_eda(df)
@@ -1419,6 +1425,19 @@ def populate_dimension_tables(df: pd.DataFrame, con: duckdb.DuckDBPyConnection) 
     return stats
 
 
+def force_list(value):
+    """
+    Ensure value is always a list.
+    """
+    if value is None or (isinstance(value, float) and pd.isna(value)):
+        return []
+    if isinstance(value, list):
+        return value
+    if isinstance(value, tuple):
+        return list(value)
+    return [value]
+
+
 def populate_fact_table(
     df: pd.DataFrame, con: duckdb.DuckDBPyConnection
 ) -> Tuple[int, Dict[str, int]]:
@@ -1430,12 +1449,12 @@ def populate_fact_table(
     print("STEP 10.1: Preparing fact table data...")
 
     def safe_list_to_str(value):
-        """Convert list/array to string safely"""
         if value is None or (isinstance(value, float) and pd.isna(value)):
-            return ""
+            return None
         if isinstance(value, (list, tuple)):
-            return ", ".join(str(v) for v in value if v)
-        return str(value)
+            clean = [str(v).strip() for v in value if v and str(v).strip()]
+            return " | ".join(clean) if clean else None
+        return str(value).strip()
 
     # Get dimension mappings
     df_locations = con.execute("SELECT * FROM d_localisation").fetchdf()
@@ -1546,9 +1565,9 @@ def populate_fact_table(
             nb_annees_exp = None
 
         # CORRECTION: Convert skills using helper function
-        hard_skills_text = safe_list_to_str(row.get("hard_skills"))
-        soft_skills_text = safe_list_to_str(row.get("soft_skills"))
-        languages_text = safe_list_to_str(row.get("languages"))
+        hard_skills_text = serialize_list(force_list(row["hard_skills"]))
+        soft_skills_text = serialize_list(force_list(row["soft_skills"]))
+        languages_text = serialize_list(force_list(row["languages"]))
 
         # Remote work boolean
         remote_value = str(row.get("remote_work", "")).lower()
@@ -1646,6 +1665,22 @@ def populate_fact_table(
     print(" Verified: {} records in f_offre".format(count))
 
     return count, validation_stats
+
+
+def serialize_list(value):
+    """
+    Serialize list-like values into JSON string.
+    Preserve structure even in TEXT column.
+    """
+    if value is None or (isinstance(value, float) and pd.isna(value)):
+        return None
+
+    if isinstance(value, (list, tuple)):
+        clean = [str(v).strip() for v in value if v and str(v).strip()]
+        return json.dumps(clean, ensure_ascii=False) if clean else None
+
+    # Si c'est déjà une string (ex: soft_skills déjà aplati)
+    return json.dumps([value.strip()], ensure_ascii=False)
 
 
 def run_data_quality_checks(con: duckdb.DuckDBPyConnection) -> None:
