@@ -44,7 +44,9 @@ En effet , la plateforme MongoDB est particulièrement adaptée au stockage de d
          Le site francetravail.fr propose une API officielle d'extraction des annonces de sa base de données.L'extraction de données à grande échelle à partir d'API publiques présente des défis structurels : latence réseau, limitations de débit (rate limiting) et hétérogénéité des données. Ce projet expose la conception d'un système de scraping "production-grade" capable d'automatiser la collecte d'offres d'emploi liées à l'Intelligence Artificielle, en optimisant le compromis entre performance et conformité aux politiques d'utilisation de l'API.
          
  Le système est conçu selon une architecture de pipeline à trois niveaux, garantissant une séparation stricte entre l'authentification, la découverte et l'extraction.
+ 
  **Pipeline de traitement :**
+ 
 •	Étage 1 (Authentification) : Implémentation du protocole OAuth2 pour la gestion des jetons d'accès.
 •	Étage 2 (Moteur de Recherche) : Pagination récursive et dédoublonnage par hachage avec une complexité temporelle de $O(1)$.
 •	Étage 3 (Scraper Parallèle) : Unité d'extraction granulaire gérant le filtrage par expressions régulières (RegEx).
