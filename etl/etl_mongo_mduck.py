@@ -48,6 +48,7 @@ from tfidf_ml_data_filter import filter_data_jobs_ml
 
 # D_localisation
 from clean_localisation import extract_city_from_location
+from clean_salary import standardize_salary_column
 from geolocation_enrichment import GeoRefFranceV2, COMPLETE_REGION_MAPPING
 import time
 
@@ -704,7 +705,8 @@ def clean_job_data(df: pd.DataFrame, output_file: str = OUTPUT_CLEANED) -> pd.Da
     print("Initial records: {}".format(len(df)))
 
     visualize_duplicates(df)
-    # df = filter_data_jobs(df)
+    df = filter_data_jobs(df)
+    df = standardize_salary_column(df, salary_col='salary')
 
     # Export to Excel
     print("=" * 80)
@@ -1355,7 +1357,7 @@ def populate_fact_table(
                 "id_date_publication": id_date_publication,
                 "start_date": row.get("start_date"),
                 "is_teletravail": is_teletravail,
-                "salaire": row.get("salary", ""),
+                "salaire": row.get("salaire", "Non spécifié"),
                 "hard_skills": hard_skills_text,
                 "soft_skills": soft_skills_text,
                 "langages": languages_text,
