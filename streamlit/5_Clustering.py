@@ -115,16 +115,6 @@ def load_data(con, limit, contract_filters=None, date_filter='Toutes', region_fi
     con.close()
     return df
 
-# Préparer les filtres
-contract_filters = {
-    'cdi': filter_cdi,
-    'cdd': filter_cdd,
-    'stage': filter_stage,
-    'alternance': filter_alternance,
-    'freelance': filter_freelance,
-    'interim': filter_interim
-}
-
 # ------------------------
 # FEATURE ENGINEERING
 # ------------------------
