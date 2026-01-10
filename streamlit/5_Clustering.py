@@ -27,9 +27,9 @@ st.title(" Clustering des offres")
 # SIDEBAR : FILTRES
 # ----------------------
 
-st.sidebar.markdown("## 🔍 Filtres")
+st.sidebar.markdown("## Filtres")
 
-limit = st.slider(
+limit = st.sidebar.slider(
     "Nombre d'offres analysées",
     min_value=200,
     max_value=5000,
@@ -38,7 +38,7 @@ limit = st.slider(
 )
 
 # Filtre contrat
-st.sidebar.markdown("### 📋 Type de contrat")
+st.sidebar.markdown("###  Type de contrat")
 filter_cdi = st.sidebar.checkbox("CDI", value=False)
 filter_cdd = st.sidebar.checkbox("CDD", value=False)
 filter_stage = st.sidebar.checkbox("Stage", value=False)
@@ -49,7 +49,7 @@ filter_interim = st.sidebar.checkbox("Intérim", value=False)
 
 
 # Filtre date
-st.sidebar.markdown("### 📅 Date de publication")
+st.sidebar.markdown("###  Date de publication")
 date_filter = st.sidebar.radio(
     "Publié depuis",
     options=['Toutes', '7 jours', '21 jours', '1 mois', '3 mois'],
@@ -58,7 +58,7 @@ date_filter = st.sidebar.radio(
 
 
 # Filtre région
-st.sidebar.markdown("### 📍 Région")
+st.sidebar.markdown("###  Région")
 region_filter = st.sidebar.multiselect(
     "Sélectionner une ou plusieurs régions",
     options=['Toutes','Auvergne-Rhône-Alpes', 'Bourgogne-Franche-Comté', 'Bretagne', 'Centre-Val de Loire', 'Corse', 'Grand Est', 'Hauts-de-France', 'Île-de-France', 'Normandie', 'Nouvelle-Aquitaine', 'Occitanie', 'Pays de la Loire', 'Provence-Alpes-Côte d\'Azur'],
@@ -70,6 +70,77 @@ st.sidebar.markdown("---")
 if st.sidebar.button("🔄 Réinitialiser les filtres", use_container_width=True):
     st.rerun()
     
+# ------------------------
+# DATA LOADING
+# ------------------------
+@st.cache_data
+
+def load_data(con, contract_filters=None, date_filter='Toutes', region_filter='Toutes', limit):
+    con = duckdb.connect(MOTHERDUCK_DATABASE)
+    
+    """Charge les données avec filtres appliqués"""
+    query = f"""
+        SELECT
+            job_id,
+            title,
+            description,
+            hard_skills,
+            soft_skills
+        FROM f_offre f
+        LEFT JOIN d_localisation l ON f.id_ville = l.id_ville
+        LEFT JOIN h_region r ON l.id_region = r.id_region
+        LEFT JOIN d_contrat c ON f.id_contrat = c.id_contrat
+        LEFT JOIN d_date d ON f.id_date_publication = d.id_date
+        WHERE description IS NOT NULL
+        LIMIT {limit}
+        
+        # Filtre contrat
+    if contract_filters:
+        conditions = []
+        if contract_filters.get('cdi'):
+            conditions.append("c.is_cdi = TRUE")
+        if contract_filters.get('cdd'):
+            conditions.append("c.is_cdd = TRUE")
+        if contract_filters.get('stage'):
+            conditions.append("c.is_stage = TRUE")
+        if contract_filters.get('alternance'):
+            conditions.append("c.is_apprentissage = TRUE")
+        if contract_filters.get('freelance'):
+            conditions.append("c.is_freelance = TRUE")
+        if contract_filters.get('interim'):
+            conditions.append("c.is_interim = TRUE")
+        
+        if conditions:
+            query += "\n    AND (" + " OR ".join(conditions) + ")"
+        
+         # Filtre date
+    if date_filter == '7 jours':
+        query += "\n    AND d.date_complete >= CURRENT_DATE - INTERVAL '7 days'"
+    elif date_filter == '21 jours':
+        query += "\n    AND d.date_complete >= CURRENT_DATE - INTERVAL '21 days'"
+    elif date_filter == '1 mois':
+        query += "\n    AND d.date_complete >= CURRENT_DATE - INTERVAL '30 days'"
+    elif date_filter == '3 mois':
+        query += "\n    AND d.date_complete >= CURRENT_DATE - INTERVAL '90 days'"
+        
+         # Filtre région
+    if region_filter and 'Toutes' not in region_filter:
+        query += "\n    AND r.region_name IN ('" + "', '".join(region_filter) + "')"
+    """
+    df = con.execute(query).df()
+    con.close()
+    return df
+
+# Préparer les filtres
+contract_filters = {
+    'cdi': filter_cdi,
+    'cdd': filter_cdd,
+    'stage': filter_stage,
+    'alternance': filter_alternance,
+    'freelance': filter_freelance,
+    'interim': filter_interim
+}
+
 # ------------------------
 # FEATURE ENGINEERING
 # ------------------------
