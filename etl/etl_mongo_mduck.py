@@ -87,7 +87,7 @@ MOTHERDUCK_TOKEN = os.getenv("MOTHERDUCK_TOKEN")
 COLLECTIONS = ["apec_raw", "francetravail_raw", "servicepublic_raw", "jobteaser_raw"]
 
 # Testing limit (set to None for full dataset)
-LIMIT = None  
+LIMIT = None
 # NLP duplicate detection threshold
 SIMILARITY_THRESHOLD = 0.9
 
@@ -483,11 +483,6 @@ def harmonize_document(doc: Dict, collection_name: str) -> Dict:
     return harmonizer(doc)
 
 
-
-
-
-
-
 def harmonize_all_data(raw_data: Dict[str, List[Dict]]) -> pd.DataFrame:
     """Harmonize all documents from all collections"""
     print("=" * 80)
@@ -662,10 +657,6 @@ def create_unified_dataset(limit: Optional[int] = LIMIT) -> pd.DataFrame:
     """Complete ETL pipeline: Extract + Harmonize + Detect Duplicates"""
     raw_data = extract_all_collections(limit)
     df = harmonize_all_data(raw_data)
-    print("🔍 DEBUG hard_skills types")
-    sample = df[["source_platform", "hard_skills"]].dropna().head(20)
-    for _, row in sample.iterrows():
-        print(row["source_platform"], type(row["hard_skills"]), row["hard_skills"])
 
     # Nettoyage minimal obligatoire
     df = df.replace("", np.nan)
@@ -706,7 +697,7 @@ def clean_job_data(df: pd.DataFrame, output_file: str = OUTPUT_CLEANED) -> pd.Da
 
     visualize_duplicates(df)
     df = filter_data_jobs(df)
-    df = standardize_salary_column(df, salary_col='salary')
+    df = standardize_salary_column(df, salary_col="salary")
 
     # Export to Excel
     print("=" * 80)
@@ -1037,69 +1028,19 @@ def populate_dimension_tables(df: pd.DataFrame, con: duckdb.DuckDBPyConnection) 
 
             time.sleep(1)  # Rate limiting
 
-    except Exception as e:
-        errors += 1
-        location_data.append(
-            {
-                "id_ville": idx,
-                "ville": ville_clean,
-                "code_postal": "00",
-                "departement": "00",
-                "latitude": None,
-                "longitude": None,
-                "id_region": 0,
-            }
-        )
-
-    location_data = [
-        {
-            "id_ville": 0,
-            "ville": "UNKNOWN",
-            "code_postal": None,
-            "departement": None,
-            "latitude": None,
-            "longitude": None,
-            "id_region": 0,
-        }
-    ]
-    for idx, row in enumerate(locations.itertuples(), 1):
-        ville_clean = locations.loc[row.Index, "ville_clean"]
-
-        if ville_clean == "UNKNOWN":
-            continue
-
-        # Déterminer la région uniquement à partir du département déjà présent si possible
-        dept = None
-        id_region = 0
-
-        if "department" in df.columns:
-            dept = (
-                df[df["location"] == row.location]["department"]
-                .dropna()
-                .astype(str)
-                .head(1)
+        except Exception as e:
+            errors += 1
+            location_data.append(
+                {
+                    "id_ville": idx,
+                    "ville": ville_clean,
+                    "code_postal": "00",
+                    "departement": "00",
+                    "latitude": None,
+                    "longitude": None,
+                    "id_region": 0,
+                }
             )
-            dept = dept.iloc[0] if not dept.empty else None
-
-            if dept in COMPLETE_REGION_MAPPING:
-                region_name, _ = COMPLETE_REGION_MAPPING[dept]
-                region_row = df_regions[df_regions["nom_region"] == region_name]
-                if not region_row.empty:
-                    id_region = int(region_row.iloc[0]["id_region"])
-
-        location_data.append(
-            {
-                "id_ville": idx,
-                "ville": ville_clean,
-                "code_postal": dept,
-                "departement": dept,
-                "latitude": None,
-                "longitude": None,
-                "id_region": id_region,
-            }
-        )
-    enriched = 0
-    errors = 0
 
     df_locations = pd.DataFrame(location_data)
 
@@ -1204,8 +1145,6 @@ def populate_dimension_tables(df: pd.DataFrame, con: duckdb.DuckDBPyConnection) 
     print("=" * 80 + "\n")
 
     return stats
-
-
 
 
 def populate_fact_table(
@@ -1399,7 +1338,6 @@ def populate_fact_table(
     print(" Verified: {} records in f_offre".format(count))
 
     return count, validation_stats
-
 
 
 def run_data_quality_checks(con: duckdb.DuckDBPyConnection) -> None:
