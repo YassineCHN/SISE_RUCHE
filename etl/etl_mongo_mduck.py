@@ -540,6 +540,62 @@ def normalize_contract_type(value: str) -> str:
     return "AUTRE"
 
 
+FRENCH_MONTHS = {
+    1: "Janvier",
+    2: "Février",
+    3: "Mars",
+    4: "Avril",
+    5: "Mai",
+    6: "Juin",
+    7: "Juillet",
+    8: "Août",
+    9: "Septembre",
+    10: "Octobre",
+    11: "Novembre",
+    12: "Décembre",
+}
+
+
+def normalize_start_date(value) -> Optional[str]:
+    """
+    Normalize start_date into:
+    - 'Mois Année'
+    - 'DÈS QUE POSSIBLE'
+    - NULL
+    """
+    if value is None:
+        return None
+
+    v = str(value).strip()
+
+    if v == "" or v.lower() in {"nan", "none"}:
+        return None
+
+    v_lower = v.lower()
+
+    # ASAP / immédiat
+    if any(
+        k in v_lower for k in ["dès que", "des que", "asap", "immédiat", "immediat"]
+    ):
+        return "DÈS QUE POSSIBLE"
+
+    # Date exacte → Mois Année
+    try:
+        parsed = pd.to_datetime(v, errors="coerce", dayfirst=True)
+        if pd.notna(parsed):
+            return f"{FRENCH_MONTHS[parsed.month]} {parsed.year}"
+    except Exception:
+        pass
+
+    # Mois Année déjà présent (Mars 2026, etc.)
+    match = re.search(r"([A-Za-zéûôîà]+)\s+(\d{4})", v)
+    if match:
+        month, year = match.groups()
+        return f"{month.capitalize()} {year}"
+
+    return None
+
+
 def normalize_generic_date(value) -> Optional[date]:
     """
     Normalize any date field to datetime.date or None
@@ -975,6 +1031,7 @@ def create_star_schema_ddl(con: duckdb.DuckDBPyConnection) -> None:
         id_contrat INTEGER,
         duree_contrat_mois INTEGER,
         id_date_publication INTEGER,
+        start_date TEXT,
         id_date_deadline INTEGER,
         is_teletravail BOOLEAN DEFAULT FALSE,
         avantages TEXT,
@@ -1479,6 +1536,7 @@ def populate_fact_table(
                 "id_contrat": id_contrat,
                 "duree_contrat_mois": row["duree_contrat_mois"],
                 "id_date_publication": id_date_publication,
+                "start_date": row.get("start_date"),
                 "id_date_deadline": id_date_deadline,
                 "is_teletravail": is_teletravail,
                 "avantages": row.get("benefits", ""),
@@ -1711,6 +1769,10 @@ def main():
             .value_counts()
             .head(30)
         )
+        print("\n🔧 Normalizing start_date (semantic)...")
+        df_cleaned["start_date"] = df_cleaned["start_date"].apply(normalize_start_date)
+        print("   → start_date distribution:")
+        print(df_cleaned["start_date"].value_counts(dropna=False).head(20))
 
         create_star_schema_ddl(con)
         populate_dimension_tables(df_cleaned, con)
