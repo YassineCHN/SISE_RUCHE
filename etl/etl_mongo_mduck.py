@@ -14,9 +14,10 @@ Updates:
 import os
 import re
 import warnings
-from datetime import datetime
+from datetime import datetime, date
 from typing import Dict, List, Optional, Any, Tuple
 from collections import Counter, defaultdict
+from pathlib import Path
 
 import pandas as pd
 import numpy as np
@@ -62,7 +63,11 @@ load_dotenv()
 # ============================================================================
 
 # MongoDB Configuration
-MONGO_URI = os.getenv("MONGO_URI")
+ENV = os.getenv("ENV", "dev")
+if ENV == "dev":
+    MONGO_URI = "mongodb://localhost:27017"
+else:
+    MONGO_URI = os.getenv("MONGO_URI")
 DATABASE_NAME = "RUCHE_datalake"
 
 # Configuration MotherDuck
@@ -72,7 +77,7 @@ MOTHERDUCK_TOKEN = os.getenv("MOTHERDUCK_TOKEN")
 COLLECTIONS = ["apec_raw", "francetravail_raw", "servicepublic_raw", "jobteaser_raw"]
 
 # Testing limit (set to None for full dataset)
-LIMIT = None
+LIMIT = 200  # Remettre à None une fois validé
 # NLP duplicate detection threshold
 SIMILARITY_THRESHOLD = 0.9
 
@@ -211,6 +216,7 @@ COMPLETE_REGION_MAPPING = {
 # PHASE 1: ETL PIPELINE - EXTRACTION & HARMONIZATION (MONGODB)
 # ============================================================================
 
+
 def connect_mongodb(
     uri: str = MONGO_URI, db_name: str = DATABASE_NAME
 ) -> pymongo.database.Database:
@@ -242,6 +248,7 @@ def extract_collection(
         print("  Extracted: {} (full)".format(len(documents)))
 
     return documents
+
 
 def extract_all_collections(limit: Optional[int] = LIMIT) -> Dict[str, List[Dict]]:
     """Extract all collections from MongoDB"""
@@ -466,6 +473,117 @@ def harmonize_document(doc: Dict, collection_name: str) -> Dict:
     return harmonizer(doc)
 
 
+def extract_contract_duration_months(value: str) -> Optional[int]:
+    """
+    Extract contract duration in months from raw text.
+    Returns None if not found or ambiguous.
+    """
+    if not value:
+        return None
+
+    v = value.lower()
+
+    # Cas explicite CDI → pas de durée
+    if "cdi" in v or "indéterminée" in v:
+        return None
+
+    # Exemples : "6 mois", "12 mois", "18 mois"
+    m = re.search(r"(\d{1,2})\s*(mois)", v)
+    if m:
+        return int(m.group(1))
+
+    # Exemples : "1 an", "2 ans"
+    m = re.search(r"(\d{1,2})\s*(an|ans)", v)
+    if m:
+        return int(m.group(1)) * 12
+
+    # Cas flous : renouvelable, permanent, etc.
+    return None
+
+
+def normalize_contract_type(value: str) -> str:
+    """
+    Normalize raw contract type into 6 categories.
+    """
+    if not value:
+        return "AUTRE"
+
+    v = value.lower()
+
+    if "cdi" in v or "indéterminée" in v:
+        return "CDI"
+
+    if "alternance" in v or "apprentissage" in v:
+        return "ALTERNANCE"
+
+    if "stage" in v:
+        return "STAGE"
+
+    if "intérim" in v or "interim" in v:
+        return "INTERIM"
+
+    if "cdd" in v or "durée déterminée" in v:
+        return "CDD"
+
+    if (
+        "titulaire" in v
+        or "contractuel" in v
+        or "fonction publique" in v
+        or "fonctionnaire" in v
+        or "emploi public" in v
+        or "territoriale" in v
+        or "hospitalière" in v
+        or "hospitalier" in v
+    ):
+        return "CONTRAT_PUBLIC"
+
+    return "AUTRE"
+
+
+def normalize_generic_date(value) -> Optional[date]:
+    """
+    Normalize any date field to datetime.date or None
+    """
+    if value is None:
+        return None
+
+    if isinstance(value, pd.Timestamp):
+        return value.date()
+
+    value = str(value).strip()
+
+    if value == "" or value.lower() in {"nan", "none"}:
+        return None
+
+    try:
+        parsed = pd.to_datetime(value, errors="coerce")
+        return parsed.date() if pd.notna(parsed) else None
+    except Exception:
+        return None
+
+
+def normalize_publication_date(value) -> Optional[date]:
+    """
+    Normalize publication_date to datetime.date or None
+    """
+    if value is None:
+        return None
+
+    if isinstance(value, pd.Timestamp):
+        return value.date()
+
+    value = str(value).strip()
+
+    if value == "" or value.lower() in {"nan", "none"}:
+        return None
+
+    try:
+        parsed = pd.to_datetime(value, errors="coerce")
+        return parsed.date() if pd.notna(parsed) else None
+    except Exception:
+        return None
+
+
 def harmonize_all_data(raw_data: Dict[str, List[Dict]]) -> pd.DataFrame:
     """Harmonize all documents from all collections"""
     print("=" * 80)
@@ -557,28 +675,34 @@ def detect_duplicates_nlp(
     try:
         tfidf_matrix = vectorizer.fit_transform(descriptions[non_empty])
         print("  Matrix shape: {}".format(tfidf_matrix.shape))
-        print("  Sparsity: {:.1f}%".format((1 - tfidf_matrix.nnz / np.prod(tfidf_matrix.shape)) * 100))
+        print(
+            "  Sparsity: {:.1f}%".format(
+                (1 - tfidf_matrix.nnz / np.prod(tfidf_matrix.shape)) * 100
+            )
+        )
     except Exception as e:
         print("  Vectorization failed: {}".format(e))
-        df['is_duplicate'] = False
-        df['duplicate_group_id'] = None
-        df['similarity_score'] = 0.0
+        df["is_duplicate"] = False
+        df["duplicate_group_id"] = None
+        df["similarity_score"] = 0.0
         return df
-    
-    print("STEP 4.3: Computing pairwise similarities (threshold: {})...".format(threshold))
-    
+
+    print(
+        "STEP 4.3: Computing pairwise similarities (threshold: {})...".format(threshold)
+    )
+
     n_docs = tfidf_matrix.shape[0]
     duplicates_found = []
-    
+
     similarity_matrix = cosine_similarity(tfidf_matrix, tfidf_matrix)
-    
+
     for i in range(n_docs):
         for j in range(i + 1, n_docs):
             if similarity_matrix[i, j] >= threshold:
                 duplicates_found.append((i, j, similarity_matrix[i, j]))
-    
+
     print("  Found {} similar pairs".format(len(duplicates_found)))
-    
+
     print("STEP 4.4: Assigning duplicate groups...")
 
     df_work["is_duplicate"] = False
@@ -634,21 +758,30 @@ def create_unified_dataset(limit: Optional[int] = LIMIT) -> pd.DataFrame:
     """Complete ETL pipeline: Extract + Harmonize + Detect Duplicates"""
     raw_data = extract_all_collections(limit)
     df = harmonize_all_data(raw_data)
+    # Nettoyage minimal obligatoire
+    df = df.replace("", np.nan)
     perform_eda(df)
-    df = detect_duplicates_nlp(df, threshold=SIMILARITY_THRESHOLD)
+    # df = detect_duplicates_nlp(df, threshold=SIMILARITY_THRESHOLD)
+    df["is_duplicate"] = False
+    df["similarity_score"] = 0.0
 
     print(f"✓ ETL Complete: {df.shape}\n")
     return df
+
 
 # ============================================================================
 # PHASE 2: DATA CLEANING & STANDARDIZATION
 # ============================================================================
 
 
-def visualize_duplicates(df, output_heatmap=OUTPUT_VISUALIZATION, output_xlsx=OUTPUT_DUPLICATES_XLSX):
+def visualize_duplicates(
+    df, output_heatmap=OUTPUT_VISUALIZATION, output_xlsx=OUTPUT_DUPLICATES_XLSX
+):
     """Create heatmap visualization and export duplicates"""
     print("STEP 5.1: Duplicate visualization and export")
     pass
+
+
 def filter_data_jobs(df):
     """Filter to keep only genuine data-related jobs - ML ENHANCED"""
     print("STEP 6.4: Data job filtering (ML-based)")
@@ -661,28 +794,43 @@ def clean_job_data(df: pd.DataFrame, output_file: str = OUTPUT_CLEANED) -> pd.Da
     print("PHASE 5: DATA CLEANING PIPELINE - START")
     print("=" * 80)
     print("Initial records: {}".format(len(df)))
-    
+
     visualize_duplicates(df)
-    df = filter_data_jobs(df)
+    # df = filter_data_jobs(df)
 
     # Export to Excel
     print("=" * 80)
     print("PHASE 6: EXPORTING CLEANED DATA")
     print("=" * 80)
-    
-    df.to_excel(output_file, index=False, engine='openpyxl')
+
+    df.to_excel(output_file, index=False, engine="openpyxl")
     print("STEP 6.12: Cleaned data exported to: {}".format(output_file))
     print("  Final records: {}".format(len(df)))
-    
+
     print("=" * 80)
     print("DATA CLEANING PIPELINE - COMPLETE")
     print("=" * 80)
-    
+
     return df
+
 
 # ============================================================================
 # PHASE 3: STAR SCHEMA MODELING - MOTHERDUCK/DUCKDB
 # ============================================================================
+
+
+def connect_duckdb_local():
+    # Chemin racine du projet (SISE_RUCHE)
+    project_root = Path(__file__).resolve().parents[1]
+
+    # data/local.duckdb au niveau racine
+    duckdb_path = project_root / "data" / "local.duckdb"
+
+    # Créer le dossier data si absent
+    duckdb_path.parent.mkdir(parents=True, exist_ok=True)
+
+    print(f"✓ Using local DuckDB: {duckdb_path}")
+    return duckdb.connect(str(duckdb_path))
 
 
 def connect_motherduck(
@@ -707,7 +855,7 @@ def connect_motherduck(
 
     except Exception as e:
         print("WARNING: MotherDuck connection failed: {}".format(e))
-        local_db = "Job_Analyses_RUCHE_v2.duckdb" # Milena
+        local_db = "Job_Analyses_RUCHE_v2.duckdb"  # Milena
         con = duckdb.connect(local_db)
         print("✓ Using local DuckDB\n")
         return con
@@ -799,15 +947,7 @@ def create_star_schema_ddl(con: duckdb.DuckDBPyConnection) -> None:
     ddl_d_contrat = """
     CREATE OR REPLACE TABLE d_contrat (
         id_contrat INTEGER PRIMARY KEY,
-        type_contrat TEXT NOT NULL,
-        is_cdi BOOLEAN DEFAULT FALSE,
-        is_cdd BOOLEAN DEFAULT FALSE,
-        is_interim BOOLEAN DEFAULT FALSE,
-        is_stage BOOLEAN DEFAULT FALSE,
-        is_apprentissage BOOLEAN DEFAULT FALSE,
-        is_freelance BOOLEAN DEFAULT FALSE,
-        duree_mois INTEGER,
-        description_contrat TEXT
+        type_contrat TEXT NOT NULL
     );
     """
     con.execute(ddl_d_contrat)
@@ -833,6 +973,7 @@ def create_star_schema_ddl(con: duckdb.DuckDBPyConnection) -> None:
         experience_required TEXT,
         id_ville INTEGER,
         id_contrat INTEGER,
+        duree_contrat_mois INTEGER,
         id_date_publication INTEGER,
         id_date_deadline INTEGER,
         is_teletravail BOOLEAN DEFAULT FALSE,
@@ -918,91 +1059,141 @@ def populate_dimension_tables(df: pd.DataFrame, con: duckdb.DuckDBPyConnection) 
     # Géocoder avec API
     print("  → Geocoding with API (this may take 10-20 minutes)...\n")
 
-    geo_api = GeoRefFranceV2()
+    # geo_api = GeoRefFranceV2()
+    # location_data = [
+    #     {
+    #         "id_ville": 0,
+    #         "ville": "UNKNOWN",
+    #         "code_postal": "00",
+    #         "departement": "00",
+    #         "latitude": None,
+    #         "longitude": None,
+    #         "id_region": 0,
+    #     }
+    # ]
+
+    # enriched = 0
+    # errors = 0
+
+    # for idx, row in enumerate(locations.itertuples(), 1):
+    #     ville_clean = locations.loc[row.Index, "ville_clean"]
+
+    #     if idx % 50 == 0:
+    #         print(
+    #             "    Progress: {}/{} ({:.1f}%)".format(
+    #                 idx, len(locations), idx / len(locations) * 100
+    #             )
+    #         )
+
+    #     if ville_clean == "UNKNOWN":
+    #         continue
+
+    #     try:
+    #         # Géocodage API
+    #         result = geo_api.get_full_location_info(ville_clean)
+
+    #         if result:
+    #             lat, lon, dept_api = result
+
+    #             # Trouver id_region (h_region existe déjà)
+    #             id_region = 0
+    #             if dept_api in COMPLETE_REGION_MAPPING:
+    #                 region_name, _ = COMPLETE_REGION_MAPPING[dept_api]
+    #                 region_row = df_regions[df_regions["nom_region"] == region_name]
+    #                 if not region_row.empty:
+    #                     id_region = int(region_row.iloc[0]["id_region"])
+
+    #             location_data.append(
+    #                 {
+    #                     "id_ville": idx,
+    #                     "ville": ville_clean,
+    #                     "code_postal": dept_api,
+    #                     "departement": dept_api,  # ← Depuis API
+    #                     "latitude": lat,
+    #                     "longitude": lon,
+    #                     "id_region": id_region,  # ← Trouvé via MAPPING
+    #                 }
+    #             )
+    #             enriched += 1
+    #         else:
+    #             location_data.append(
+    #                 {
+    #                     "id_ville": idx,
+    #                     "ville": ville_clean,
+    #                     "code_postal": "00",
+    #                     "departement": "00",
+    #                     "latitude": None,
+    #                     "longitude": None,
+    #                     "id_region": 0,
+    #                 }
+    #             )
+    #             errors += 1
+
+    #         time.sleep(1)  # Rate limiting
+
+    # except Exception as e:
+    #     errors += 1
+    #     location_data.append(
+    #         {
+    #             "id_ville": idx,
+    #             "ville": ville_clean,
+    #             "code_postal": "00",
+    #             "departement": "00",
+    #             "latitude": None,
+    #             "longitude": None,
+    #             "id_region": 0,
+    #         }
+    #     )
+
     location_data = [
         {
             "id_ville": 0,
             "ville": "UNKNOWN",
-            "code_postal": "00",
-            "departement": "00",
+            "code_postal": None,
+            "departement": None,
             "latitude": None,
             "longitude": None,
             "id_region": 0,
         }
     ]
-
-    enriched = 0
-    errors = 0
-
     for idx, row in enumerate(locations.itertuples(), 1):
         ville_clean = locations.loc[row.Index, "ville_clean"]
-
-        if idx % 50 == 0:
-            print(
-                "    Progress: {}/{} ({:.1f}%)".format(
-                    idx, len(locations), idx / len(locations) * 100
-                )
-            )
 
         if ville_clean == "UNKNOWN":
             continue
 
-        try:
-            # Géocodage API
-            result = geo_api.get_full_location_info(ville_clean)
+        # Déterminer la région uniquement à partir du département déjà présent si possible
+        dept = None
+        id_region = 0
 
-            if result:
-                lat, lon, dept_api = result
-
-                # Trouver id_region (h_region existe déjà)
-                id_region = 0
-                if dept_api in COMPLETE_REGION_MAPPING:
-                    region_name, _ = COMPLETE_REGION_MAPPING[dept_api]
-                    region_row = df_regions[df_regions["nom_region"] == region_name]
-                    if not region_row.empty:
-                        id_region = int(region_row.iloc[0]["id_region"])
-
-                location_data.append(
-                    {
-                        "id_ville": idx,
-                        "ville": ville_clean,
-                        "code_postal": dept_api,
-                        "departement": dept_api,  # ← Depuis API
-                        "latitude": lat,
-                        "longitude": lon,
-                        "id_region": id_region,  # ← Trouvé via MAPPING
-                    }
-                )
-                enriched += 1
-            else:
-                location_data.append(
-                    {
-                        "id_ville": idx,
-                        "ville": ville_clean,
-                        "code_postal": "00",
-                        "departement": "00",
-                        "latitude": None,
-                        "longitude": None,
-                        "id_region": 0,
-                    }
-                )
-                errors += 1
-
-            time.sleep(1)  # Rate limiting
-
-        except Exception as e:
-            errors += 1
-            location_data.append(
-                {
-                    "id_ville": idx,
-                    "ville": ville_clean,
-                    "code_postal": "00",
-                    "departement": "00",
-                    "latitude": None,
-                    "longitude": None,
-                    "id_region": 0,
-                }
+        if "department" in df.columns:
+            dept = (
+                df[df["location"] == row.location]["department"]
+                .dropna()
+                .astype(str)
+                .head(1)
             )
+            dept = dept.iloc[0] if not dept.empty else None
+
+            if dept in COMPLETE_REGION_MAPPING:
+                region_name, _ = COMPLETE_REGION_MAPPING[dept]
+                region_row = df_regions[df_regions["nom_region"] == region_name]
+                if not region_row.empty:
+                    id_region = int(region_row.iloc[0]["id_region"])
+
+        location_data.append(
+            {
+                "id_ville": idx,
+                "ville": ville_clean,
+                "code_postal": dept,
+                "departement": dept,
+                "latitude": None,
+                "longitude": None,
+                "id_region": id_region,
+            }
+        )
+    enriched = 0
+    errors = 0
 
     df_locations = pd.DataFrame(location_data)
 
@@ -1024,7 +1215,12 @@ def populate_dimension_tables(df: pd.DataFrame, con: duckdb.DuckDBPyConnection) 
 
     print("STEP 8.3: Populating d_date...")
 
-    dates_series = pd.to_datetime(df["publication_date"], errors="coerce").dropna()
+    dates_series = pd.concat(
+        [
+            df["publication_date"],
+            df["application_deadline"],
+        ]
+    ).dropna()
     from datetime import date as dt_date
 
     date_data = [
@@ -1080,53 +1276,21 @@ def populate_dimension_tables(df: pd.DataFrame, con: duckdb.DuckDBPyConnection) 
     # ========================================================================
 
     print("STEP 8.4: Populating d_contrat...")
-
-    contract_types = (
-        df["contract_type"].fillna("UNKNOWN").replace("", "UNKNOWN").unique()
-    )
-
+    # Dimension contrat NORMALISÉE (6 valeurs max)
     contract_data = [
-        {
-            "id_contrat": 0,
-            "type_contrat": "UNKNOWN",
-            "is_cdi": False,
-            "is_cdd": False,
-            "is_interim": False,
-            "is_stage": False,
-            "is_apprentissage": False,
-            "is_freelance": False,
-            "duree_mois": None,
-            "description_contrat": "Type de contrat non renseigné",
-        }
+        {"id_contrat": 0, "type_contrat": "AUTRE"},
+        {"id_contrat": 1, "type_contrat": "CDI"},
+        {"id_contrat": 2, "type_contrat": "CDD"},
+        {"id_contrat": 3, "type_contrat": "STAGE"},
+        {"id_contrat": 4, "type_contrat": "ALTERNANCE"},
+        {"id_contrat": 5, "type_contrat": "INTERIM"},
+        {"id_contrat": 6, "type_contrat": "CONTRAT_PUBLIC"},
     ]
-
-    for idx, contract in enumerate(contract_types, 1):
-        if contract == "UNKNOWN":
-            continue
-
-        contract_str = str(contract).upper()
-
-        contract_data.append(
-            {
-                "id_contrat": idx,
-                "type_contrat": contract,
-                "is_cdi": "CDI" in contract_str,
-                "is_cdd": "CDD" in contract_str,
-                "is_interim": "INTERIM" in contract_str or "INTÉRIM" in contract_str,
-                "is_stage": "STAGE" in contract_str,
-                "is_apprentissage": "APPRENTISSAGE" in contract_str,
-                "is_freelance": "FREELANCE" in contract_str
-                or "INDÉPENDANT" in contract_str,
-                "duree_mois": None,
-                "description_contrat": contract,
-            }
-        )
-
     df_contracts = pd.DataFrame(contract_data)
     con.execute("DELETE FROM d_contrat")
     con.execute("INSERT INTO d_contrat SELECT * FROM df_contracts")
     stats["d_contrat"] = len(df_contracts)
-    print("  ✅ Inserted {} contract types\n".format(len(df_contracts)))
+    print(f"  ✅ Inserted {len(df_contracts)} normalized contract types\n")
 
     # ========================================================================
     # SUMMARY
@@ -1150,7 +1314,7 @@ def populate_fact_table(
     print("=" * 80)
 
     print("STEP 10.1: Preparing fact table data...")
-    
+
     def safe_list_to_str(value):
         """Convert list/array to string safely"""
         if value is None or (isinstance(value, float) and pd.isna(value)):
@@ -1158,7 +1322,6 @@ def populate_fact_table(
         if isinstance(value, (list, tuple)):
             return ", ".join(str(v) for v in value if v)
         return str(value)
-
 
     # Get dimension mappings
     df_locations = con.execute("SELECT * FROM d_localisation").fetchdf()
@@ -1178,7 +1341,13 @@ def populate_fact_table(
     contract_map[None] = 0
 
     # Create date mapping (date -> id_date)
-    date_map = df_dates.set_index("date_complete")["id_date"].to_dict()
+    date_map = {}
+    for _, row in df_dates.iterrows():
+        d = row["date_complete"]
+        # d peut être datetime64, Timestamp ou date
+        if pd.notna(d):
+            d_key = pd.to_datetime(d).date().isoformat()  # ← CLÉ UNIQUE
+            date_map[d_key] = int(row["id_date"])
     date_map[None] = 0
 
     print(" v Loaded {} location mappings".format(len(location_map)))
@@ -1202,25 +1371,25 @@ def populate_fact_table(
 
     for idx, row in df.iterrows():
         # Map location
-        location_raw = row['location']
-        if pd.isna(location_raw) or location_raw == '':
-            ville_clean = 'UNKNOWN'
-            validation_stats['missing_location'] += 1
+        location_raw = row["location"]
+        if pd.isna(location_raw) or location_raw == "":
+            ville_clean = "UNKNOWN"
+            validation_stats["missing_location"] += 1
         else:
             # Nettoyer la ville avec la même fonction que pour d_localisation
             ville_clean = extract_city_from_location(location_raw)
-            if ville_clean == 'UNKNOWN':
-                validation_stats['missing_location'] += 1
+            if ville_clean == "UNKNOWN":
+                validation_stats["missing_location"] += 1
             else:
-                validation_stats['valid_location'] += 1
-        
+                validation_stats["valid_location"] += 1
+
         # Mapper avec la ville nettoyée
         id_ville = location_map.get(ville_clean, 0)
 
         # Map contract
-        contract_value = row["contract_type"]
+        contract_value = row["type_contrat_normalise"]
         if pd.isna(contract_value) or contract_value == "":
-            contract_value = "UNKNOWN"
+            contract_value = "AUTRE"
             validation_stats["missing_contract"] += 1
         else:
             validation_stats["valid_contract"] += 1
@@ -1228,30 +1397,24 @@ def populate_fact_table(
         id_contrat = contract_map.get(contract_value, 0)
 
         # Map publication date
-        try:
-            if pd.notna(row["publication_date"]):
-                pub_date = pd.to_datetime(row["publication_date"]).date()
-                id_date_publication = date_map.get(pub_date, 0)
-                if id_date_publication != 0:
-                    validation_stats["valid_pub_date"] += 1
-                else:
-                    validation_stats["invalid_pub_date"] += 1
-            else:
-                id_date_publication = 0
-                validation_stats["invalid_pub_date"] += 1
-        except:
-            id_date_publication = 0
+        pub_date = row["publication_date"]
+        if pub_date is not None:
+            pub_date_key = pub_date.isoformat()  # YYYY-MM-DD
+        else:
+            pub_date_key = None
+        id_date_publication = date_map.get(pub_date_key, 0)
+        if id_date_publication != 0:
+            validation_stats["valid_pub_date"] += 1
+        else:
             validation_stats["invalid_pub_date"] += 1
 
         # Map deadline date
-        try:
-            if pd.notna(row["application_deadline"]):
-                deadline_date = pd.to_datetime(row["application_deadline"]).date()
-                id_date_deadline = date_map.get(deadline_date, 0)
-            else:
-                id_date_deadline = 0
-        except:
-            id_date_deadline = 0
+        deadline_date = row["application_deadline"]
+        if deadline_date is not None:
+            deadline_key = deadline_date.isoformat()
+        else:
+            deadline_key = None
+        id_date_deadline = date_map.get(deadline_key, 0)
 
         # Experience years
         try:
@@ -1273,7 +1436,17 @@ def populate_fact_table(
 
         # Remote work boolean
         remote_value = str(row.get("remote_work", "")).lower()
-        is_teletravail = remote_value in ["oui", "yes", "true", "partiel", "total", "hybride", "full remote", "distanciel", "télétravail"]
+        is_teletravail = remote_value in [
+            "oui",
+            "yes",
+            "true",
+            "partiel",
+            "total",
+            "hybride",
+            "full remote",
+            "distanciel",
+            "télétravail",
+        ]
 
         # Driving license boolean
         driving_value = str(row.get("driving_license", "")).lower()
@@ -1307,6 +1480,7 @@ def populate_fact_table(
                 "experience_required": row["experience_required"],
                 "id_ville": id_ville,
                 "id_contrat": id_contrat,
+                "duree_contrat_mois": row["duree_contrat_mois"],
                 "id_date_publication": id_date_publication,
                 "id_date_deadline": id_date_deadline,
                 "is_teletravail": is_teletravail,
@@ -1355,6 +1529,7 @@ def populate_fact_table(
     print(" Verified: {} records in f_offre".format(count))
 
     return count, validation_stats
+
 
 def run_data_quality_checks(con: duckdb.DuckDBPyConnection) -> None:
     """
@@ -1486,13 +1661,14 @@ def main():
     print("=" * 80)
     print("PHASE 2: DATA CLEANING")
     print("=" * 80)
-    
+
     try:
         df_cleaned = clean_job_data(df_raw, output_file=OUTPUT_CLEANED)
-        
+
     except Exception as e:
         print("Cleaning failed: {}".format(e))
         import traceback
+
         traceback.print_exc()
         return df_raw
 
@@ -1502,7 +1678,43 @@ def main():
     print("=" * 80)
     con = None
     try:
-        con = connect_motherduck()
+        if ENV == "dev":
+            con = connect_duckdb_local()
+        else:
+            con = connect_motherduck()
+
+        print("\n🔧 Normalizing publication_date BEFORE star schema...")
+        df_cleaned["publication_date"] = df_cleaned["publication_date"].apply(
+            normalize_publication_date
+        )
+        valid_dates = df_cleaned["publication_date"].notna().sum()
+        print(
+            f"   → Valid publication_date after normalization: {valid_dates}/{len(df_cleaned)}"
+        )
+
+        print("\n🔧 Normalizing contract types and extracting duration...")
+        df_cleaned["type_contrat_normalise"] = df_cleaned["contract_type"].apply(
+            normalize_contract_type
+        )
+        df_cleaned["duree_contrat_mois"] = df_cleaned["contract_type"].apply(
+            extract_contract_duration_months
+        )
+        print("   → Contract type distribution (normalized):")
+        print(df_cleaned["type_contrat_normalise"].value_counts())
+        print("\n🔍 AUDIT CONTRACTS → AUTRE")
+        df_autre = df_cleaned[df_cleaned["type_contrat_normalise"] == "AUTRE"]
+        print(f"Nombre d'offres classées AUTRE: {len(df_autre)}")
+        print("\nTop 30 valeurs brutes de contract_type dans AUTRE:")
+        print(df_autre["contract_type"].fillna("NULL").value_counts().head(30))
+        print("\n🔍 AUTRE avec durée détectée (potentiel mauvais classement)")
+        df_autre_duree = df_autre[df_autre["duree_contrat_mois"].notna()]
+        print(f"Nombre d'offres AUTRE avec durée: {len(df_autre_duree)}")
+        print(
+            df_autre_duree[["contract_type", "duree_contrat_mois", "source_platform"]]
+            .value_counts()
+            .head(30)
+        )
+
         create_star_schema_ddl(con)
         populate_dimension_tables(df_cleaned, con)
         populate_fact_table(df_cleaned, con)
