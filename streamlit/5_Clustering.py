@@ -113,7 +113,7 @@ def label_clusters(df, cluster_col="cluster_id", top_n=3):
 # -----------------------------------
 # CHARGEMENT DES DONNEES ET CALCULS
 # -----------------------------------
-df = load_data(contract_filters, date_filter, region_filter, limit)
+df = load_data(contract_filters=contract_filters if any(contract_filters.values()) else None, date_filter, region_filter, limit)
 
 st.caption(f"📄 {len(df)} offres analysées après filtres")
 df["ml_text"] = df.apply(build_ml_text, axis=1)
