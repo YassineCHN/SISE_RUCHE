@@ -113,7 +113,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 st.sidebar.image("./static/Logo3.png", width=150)
-st.sidebar.markdown("# Home page")
+st.sidebar.markdown("# Filtres")
 
 st.markdown("""
 <div class="search-header">
@@ -135,19 +135,42 @@ def get_total_offers():
     con = get_connection()
     return con.execute("SELECT COUNT(*) FROM f_offre WHERE embedding IS NOT NULL").fetchone()[0]
 
+@st.cache_data(ttl=3600)
+def get_regions():
+    """Récupère les régions distinctes (sans UNKNOWN)"""
+    con = get_connection()
+    try:
+        regions = con.execute("""
+            SELECT DISTINCT nom_region 
+            FROM h_region 
+            WHERE nom_region IS NOT NULL 
+                AND nom_region != 'UNKNOWN'
+            ORDER BY nom_region
+        """).fetchdf()['nom_region'].tolist()
+        return regions
+    except Exception as e:
+        st.error(f"Erreur chargement régions: {e}")
+        return []
+
 def semantic_search(query_embedding: np.ndarray, top_k: int = 50, 
-                    ville_filter: list = None, contrat_filter: list = None,
+                    region_filter: list = None, contract_filters: dict = None,
                     min_similarity: float = 0.0) -> pd.DataFrame:
     con = get_connection()
     embedding_list = query_embedding.tolist()
     
-    where_clauses = ["f.embedding IS NOT NULL"]
-    if ville_filter and len(ville_filter) > 0:
-        villes_sql = "', '".join(ville_filter)
-        where_clauses.append(f"l.ville IN ('{villes_sql}')")
-    if contrat_filter and len(contrat_filter) > 0:
-        contrats_sql = "', '".join(contrat_filter)
-        where_clauses.append(f"c.type_contrat IN ('{contrats_sql}')")
+    where_clauses = ["f.embedding IS NOT NULL", "f.is_duplicate = FALSE"]
+    
+    # Filtre par région
+    if region_filter and len(region_filter) > 0:
+        regions_sql = "', '".join([r.replace("'", "''") for r in region_filter])
+        where_clauses.append(f"r.nom_region IN ('{regions_sql}')")
+    
+    # Filtre par contrat (checkboxes)
+    if contract_filters:
+        selected_contracts = [k for k, v in contract_filters.items() if v]
+        if selected_contracts:
+            contracts_sql = "', '".join([c.replace("'", "''") for c in selected_contracts])
+            where_clauses.append(f"c.type_contrat IN ('{contracts_sql}')")
     
     where_sql = " AND ".join(where_clauses)
     
@@ -157,11 +180,13 @@ def semantic_search(query_embedding: np.ndarray, top_k: int = 50,
             f.job_id, f.title, f.company_name, f.description, f.source_url,
             COALESCE(l.ville, 'Non spécifié') AS ville,
             COALESCE(l.code_postal, '') AS code_postal,
+            COALESCE(r.nom_region, 'Non spécifié') AS region,
             COALESCE(c.type_contrat, 'Non spécifié') AS type_contrat,
             COALESCE(f.hard_skills, '') AS hard_skills,
             ROUND(array_cosine_similarity(f.embedding, ?::FLOAT[768]) * 100, 1) AS similarity_score
         FROM f_offre f
         LEFT JOIN d_localisation l ON f.id_ville = l.id_ville
+        LEFT JOIN h_region r ON l.id_region = r.id_region
         LEFT JOIN d_contrat c ON f.id_contrat = c.id_contrat
         WHERE {where_sql}
     )
@@ -176,15 +201,6 @@ def semantic_search(query_embedding: np.ndarray, top_k: int = 50,
     except Exception as e:
         st.error(f"Erreur recherche: {e}")
         return pd.DataFrame()
-
-def get_filter_options():
-    con = get_connection()
-    try:
-        villes = con.execute("SELECT DISTINCT ville FROM d_localisation WHERE ville IS NOT NULL ORDER BY ville").fetchdf()['ville'].tolist()
-        contrats = con.execute("SELECT DISTINCT type_contrat FROM d_contrat WHERE type_contrat IS NOT NULL ORDER BY type_contrat").fetchdf()['type_contrat'].tolist()
-        return villes, contrats
-    except:
-        return [], []
 
 def render_job_card_native(job: dict):
     with st.container():
@@ -202,8 +218,16 @@ def render_job_card_native(job: dict):
         st.markdown(f'<div class="job-company">{company}</div>', unsafe_allow_html=True)
         
         ville = html.escape(job.get("ville") or "Non spécifié")
+        region = html.escape(job.get("region") or "")
         code_postal = html.escape(job.get("code_postal") or "")
-        location = f"{ville} ({code_postal})" if code_postal else ville
+        
+        location_parts = []
+        if ville:
+            location_parts.append(f"{ville} ({code_postal})" if code_postal else ville)
+        if region:
+            location_parts.append(region)
+        location = " • ".join(location_parts) if location_parts else "Non spécifié"
+        
         contrat = html.escape(job.get("type_contrat") or "Non spécifié")
         score = job.get("similarity_score", 0)
         
@@ -242,11 +266,29 @@ with st.spinner("🤖 Chargement du modèle IA..."):
     model = load_model()
 
 with st.sidebar:
-    st.markdown("### ⚙️ Paramètres de recherche")
-    villes, contrats = get_filter_options()
+    #st.markdown("### ⚙️ Paramètres de recherche")
     
-    ville_filter = st.multiselect("📍 Localisation", villes, default=[])
-    contrat_filter = st.multiselect("📋 Type de contrat", contrats, default=[])
+    # Filtre Région (multiselect)
+    regions = get_regions()
+    st.markdown("#### Région")
+    region_filter = st.multiselect(
+        "Sélectionnez une ou plusieurs régions",
+        options=regions,
+        default=[],
+        label_visibility="collapsed"
+    )
+    
+    # Filtre Type de contrat (checkboxes)
+    st.markdown("#### Type de contrat")
+    filter_cdi = st.checkbox("CDI", value=False)
+    filter_cdd = st.checkbox("CDD", value=False)
+    filter_stage = st.checkbox("Stage", value=False)
+    filter_alternance = st.checkbox("Alternance / Apprentissage", value=False)
+    filter_freelance = st.checkbox("Freelance", value=False)
+    filter_interim = st.checkbox("Intérim", value=False)
+    filter_public = st.checkbox("Contrat public", value=False)
+    
+    st.markdown("---")
     
     min_similarity = st.slider(
         "🎯 Score minimum de pertinence (%)",
@@ -260,8 +302,8 @@ with st.sidebar:
     top_k = st.slider("📊 Nombre de résultats", 10, 100, 50, 10)
     
     st.markdown("---")
-    st.markdown("### 💡 Conseils de recherche")
-    st.info("⚙ Data Analyst CDI Paris\n\n⚙ Stage Java/Spark\n\n⚙ ML engineer expérimenté\n\n⚙ Alternance data science Lyon")
+    st.markdown("### 💡 Conseils de recherche textuelle")
+    st.info("⚙ Data Analyst CDI Île-de-France\n\n⚙ Stage Java/Spark\n\n⚙ ML engineer expérimenté\n\n⚙ Alternance data science Auvergne-Rhône-Alpes")
 
 st.markdown('<div class="search-container">', unsafe_allow_html=True)
 query = st.text_input(
@@ -276,13 +318,24 @@ with col1:
     search_button = st.button("Lancer la recherche 🚀", use_container_width=True)
 
 if search_button and query:
+    # Préparer les filtres contrat
+    contract_filters = {
+        "CDI": filter_cdi,
+        "CDD": filter_cdd,
+        "STAGE": filter_stage,
+        "ALTERNANCE": filter_alternance,
+        "INTERIM": filter_interim,
+        "AUTRE": filter_freelance,
+        "CONTRAT_PUBLIC": filter_public,
+    }
+    
     with st.spinner("🔎 Recherche en cours..."):
         query_embedding = model.encode(query, convert_to_numpy=True)
         results = semantic_search(
             query_embedding, 
             top_k, 
-            ville_filter if ville_filter else None, 
-            contrat_filter if contrat_filter else None,
+            region_filter if region_filter else None,
+            contract_filters if any(contract_filters.values()) else None,
             min_similarity
         )
     
@@ -316,5 +369,4 @@ elif search_button:
     st.error("❌ Veuillez entrer une requête.")
 
 st.markdown("<br><br>", unsafe_allow_html=True)
-#st.divider()
 st.markdown("<div style='text-align: center; color: #718096; font-size: 0.9rem;'>Powered by <strong>MotherDuck</strong> × <strong>Sentence Transformers</strong> | RUCHE Team © 2026</div>", unsafe_allow_html=True)
