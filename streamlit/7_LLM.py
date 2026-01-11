@@ -1,8 +1,13 @@
+from pyexpat.errors import messages
 from dotenv import find_dotenv, load_dotenv
-import numpy
+import numpy as np
 import streamlit as st
 import os
+import json
+from datetime import date 
 from mistralai import Mistral
+
+
 
 
 load_dotenv(find_dotenv())
@@ -17,6 +22,10 @@ st.set_page_config(
 
 class MistralAPI:
 
+    DEFAULT_TEMPERATURE = 0.2
+    DEFAULT_MAX_TOKENS = 1200
+    DEFAULT_TOP_P = 0.9
+
     def __init__(self, model: str) -> None:
         api_key = os.getenv("MISTRAL_API_KEY")
         if not api_key:
@@ -26,45 +35,58 @@ class MistralAPI:
         self.client = Mistral(api_key=api_key)
         self.model = model
 
-    def query(
+    def chat_json(
         self,
-        query: str,
-        temperature: float = 0.5,
-        max_tokens: int = 50,
-        top_p: float = 0.1,
-    ) -> str:
+        system_prompt: str, 
+        user_query: str,
+        history_messages: list | None = None,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
+        top_p: float | None = None,
+    ) -> dict:
+        """ Send back a dict Json of the offer asked by the user (or raise an exception if not possible)"""
+        
+        if history_messages is None:
+            history_messages = []
+
+
+        if temperature is None:
+            temperature = self.DEFAULT_TEMPERATURE
+        if max_tokens is None:
+            max_tokens = self.DEFAULT_MAX_TOKENS
+        if top_p is None:
+            top_p = self.DEFAULT_TOP_P
+
+
+        
+        messages = [{"role": "system", "content": system_prompt}]
+
+        for m in history_messages:
+            role = m.get("role")
+            content = m.get("content")
+            if role in ("user", "assistant") and isinstance(content, str):
+                messages.append({"role": role, "content": content})
+
+        
+        messages.append({"role": "user", "content": user_query}) # Dernière question 
 
         chat_response = self.client.chat.complete(
             model=self.model,
+            messages=messages,
             temperature=temperature,
             top_p=top_p,  # proba cumulative
             max_tokens=max_tokens,  # calibre la taille de la réponse généré
-            messages=[
-                {
-                    "role": "user",
-                    "content": query,
-                },
-            ],
+            response_format={"type": "json_object"},
         )
-        print(chat_response.choices[0].message.content)
-        return chat_response.choices[0].message.content
 
-    def build_prompt(self, history: str, query: str) -> list[dict[str, str]]:
-        history_prompt = f"""
-        # Historique de conversation:
-        {history}
-        """
-        query_prompt = f"""
-        # Question:
-        {query}
+        content = chat_response.choices[0].message.content
+        print("Mistral Raw Response:", content)
 
-        # Réponse:
-        """
-        return [
-            {"role": "system", "content": history_prompt},
-            {"role": "user", "content": query_prompt},
-        ]
-
+        try:
+            return json.loads(content)
+        except json.JSONDecodeError as e:
+            # On remonte le contenu brut pour debug
+            raise ValueError(f"JSON invalide: {e}\n\nRAW:\n{content}")
 
 col1, col2 = st.columns([1, 2])
 
@@ -82,18 +104,9 @@ with col1:
 with col2:
     role_prompt = st.text_area(
         label="Le rôle du chatbot",
-        value="""Tu es un agent conversationnel. Tu vas recevoir la description d'une offre et tu devras analyser l'offre pour la reformater dans un format spécifique.""",
+        value="""Tu es un agent conversationnel. Tu vas recevoir la description d'une offre et tu devras analyser l'offre pour la reformater dans un JSON structuré.""",
+        height=120,
     )
-
-col_max_tokens, col_temperature, _ = st.columns([0.25, 0.25, 0.5])
-with col_max_tokens:
-    max_tokens = st.select_slider(
-        label="Output max tokens", options=list(range(200, 2000, 50))
-    )
-
-with col_temperature:
-    range_temperature = [round(x, 2) for x in list(numpy.linspace(0, 5, num=50))]
-    temperature = st.select_slider(label="Temperature", options=range_temperature)
 
 
 if "messages" not in st.session_state:
@@ -104,6 +117,55 @@ for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
+SCHEMA_TEXT = """{
+  "scraped_at": "YYYY-MM-DD",
+
+  "title": "Intitulé du poste",
+  "description": "Texte complet de l'offre",
+
+  "company_name": "Nom de l'entreprise",
+  "company_description": "Optionnel | none",
+
+  "nb_annees_experience": 0,
+  "experience_required": "Optionnel | none",
+
+  "ville": "Ville | UNKNOWN",
+  "code_postal": "00 | none",
+
+  "type_contrat": "CDI | CDD | Stage | Alternance | Freelance | ... | UNKNOWN",
+  "duree_contrat_mois": 0,
+  "start_date": "YYYY-MM-DD | none",
+  "is_teletravail": "true|false",
+
+  "publication_date": "YYYY-MM-DD | none",
+
+  "salaire": "texte libre | none",
+  "hard_skills": "Python;SQL;Docker | none",
+  "soft_skills": "Communication;Autonomie | none",
+  "langages": "Français;Anglais | none",
+
+  "education_level": "Bac+5 | ... | UNKNOWN",
+  "job_function": "Data / IA | ... | UNKNOWN",
+  "job_grade": "Junior | Confirmé | Senior | UNKNOWN"
+}"""
+
+today = date.today().isoformat()
+
+SYSTEM_PROMPT = f"""
+{role_prompt}
+Tu DOIS répondre UNIQUEMENT avec un JSON valide (pas de markdown, pas de texte autour).
+Respecte EXACTEMENT les clés du schéma ci-dessous (ne rajoute pas de clés).
+
+Règles:
+- Si une info est absente: mets "none" (string) ou 0 pour les champs numériques, ou "UNKNOWN" pour ville/contrat/niveau quand pertinent.
+- Les listes doivent être une string séparée par ';' (ex: "Python;SQL;Docker").
+- is_teletravail doit être un booléen strict (true/false).
+- scraped_at doit être "{today}" (date du scraping aujourd'hui).
+
+Schéma à respecter:
+{SCHEMA_TEXT}
+""".strip()
+
 # Si présence d'un input par l'utilisateur,
 if query := st.chat_input(""):
     if query.strip():
@@ -113,25 +175,33 @@ if query := st.chat_input(""):
         # On ajoute le message de l'utilisateur dans l'historique de la conversation
         st.session_state.messages.append({"role": "user", "content": query})
         # On récupère la réponse du chatbot à la question de l'utilisateur
-        response = llm(
-            query=query,
-            history=st.session_state.messages,
-        )
-        # On affiche la réponse du chatbot
-        with st.chat_message("assistant"):
-            st.markdown(response)
-        # On ajoute le message du chatbot dans l'historique de la conversation
-        st.session_state.messages.append({"role": "assistant", "content": response})
-    # On ajoute un bouton pour réinitialiser le chat
+        try : 
+            data = llm.chat_json(
+                system_prompt=SYSTEM_PROMPT,
+                history_messages=st.session_state.messages[:-1],
+                user_query=query,
+                temperature=llm.DEFAULT_TEMPERATURE,
+                max_tokens=llm.DEFAULT_MAX_TOKENS,
+                top_p=llm.DEFAULT_TOP_P,
+            )
 
-if st.button("Réinitialiser le Chat", type="primary"):
+            pretty = json.dumps(data, ensure_ascii=False, indent=2)
+            with st.chat_message("assistant"):
+               st.code(pretty, language="json")
+               st.download_button(
+                    label="Télécharger le JSON",
+                    data=pretty,
+                    file_name="offre_structuree.json",
+                    mime="application/json",
+            )
+
+            st.session_state.messages.append({"role": "assistant", "content": pretty})
+
+        except Exception as e:
+            with st.chat_message("assistant"):
+                st.error(f"Erreur lors de la génération de la réponse: {e}")
+
+if st.button("Clear Conversation", type="primary"):
     st.session_state.messages = []
     st.rerun()
 
-
-llm.query(
-    query="Peux tu me dire en une phrase, quel est le métier le plus compliqué dans le domaine de la Data?",
-    temperature=1,
-    max_tokens=15,
-    top_p=0.5,
-)

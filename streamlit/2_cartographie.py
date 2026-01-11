@@ -102,6 +102,8 @@ filter_stage = st.sidebar.checkbox("Stage", value=False)
 filter_alternance = st.sidebar.checkbox("Alternance / Apprentissage", value=False)
 filter_freelance = st.sidebar.checkbox("Freelance", value=False)
 filter_interim = st.sidebar.checkbox("Intérim", value=False)
+filter_public = st.sidebar.checkbox("Contrat public", value=False)
+
 
 # Filtre salaire
 st.sidebar.markdown("### 💰 Salaire")
@@ -198,24 +200,16 @@ def load_map_data(_conn, contract_filters=None, salary_filter='Tous', date_filte
     """
     
     # Filtre contrat
+    # Filtre contrat (nouveau modèle: d_contrat.type_contrat)
     if contract_filters:
-        conditions = []
-        if contract_filters.get('cdi'):
-            conditions.append("c.is_cdi = TRUE")
-        if contract_filters.get('cdd'):
-            conditions.append("c.is_cdd = TRUE")
-        if contract_filters.get('stage'):
-            conditions.append("c.is_stage = TRUE")
-        if contract_filters.get('alternance'):
-            conditions.append("c.is_apprentissage = TRUE")
-        if contract_filters.get('freelance'):
-            conditions.append("c.is_freelance = TRUE")
-        if contract_filters.get('interim'):
-            conditions.append("c.is_interim = TRUE")
-        
-        if conditions:
-            query += "\n    AND (" + " OR ".join(conditions) + ")"
-    
+        selected_contracts = [k for k, v in contract_filters.items() if v]
+
+        if selected_contracts:
+            # protection simple contre quotes (même si ici ce sont des constantes)
+            selected_contracts = [c.replace("'", "''") for c in selected_contracts]
+            contracts_sql = ", ".join(f"'{c}'" for c in selected_contracts)
+            query += f"\n    AND c.type_contrat IN ({contracts_sql})"
+
     # Filtre salaire - utilisation de catégorie_salaire
     if salary_filter == 'Renseigné':
         query += "\n    AND f.salaire IS NOT NULL AND f.salaire != '' AND f.salaire != 'Non spécifié'"
@@ -237,10 +231,10 @@ def load_map_data(_conn, contract_filters=None, salary_filter='Tous', date_filte
     if hard_skills and len(hard_skills) > 0:
         skills_conditions = []
         for skill in hard_skills:
-            skills_conditions.append(f"f.hard_skills LIKE '%{skill}%'")
-        
-        if skills_conditions:
-            query += "\n    AND (" + " OR ".join(skills_conditions) + ")"
+            safe_skill = skill.replace("'", "''")
+            skills_conditions.append(f"f.hard_skills ILIKE '%{safe_skill}%'")
+
+        query += "\n    AND (" + " OR ".join(skills_conditions) + ")"
     
     # Filtre Job Function
     if job_functions and len(job_functions) > 0:
@@ -262,14 +256,14 @@ def load_map_data(_conn, contract_filters=None, salary_filter='Tous', date_filte
 
 # Préparer les filtres
 contract_filters = {
-    'cdi': filter_cdi,
-    'cdd': filter_cdd,
-    'stage': filter_stage,
-    'alternance': filter_alternance,
-    'freelance': filter_freelance,
-    'interim': filter_interim
+    "CDI": filter_cdi,
+    "CDD": filter_cdd,
+    "STAGE": filter_stage,
+    "ALTERNANCE": filter_alternance,
+    "INTERIM": filter_interim,
+    "AUTRE": filter_freelance,  # ← ton checkbox "Freelance" mappe vers AUTRE
+    "CONTRAT_PUBLIC": filter_public,
 }
-
 # Charger les données avec filtres
 df = load_map_data(
     conn, 
