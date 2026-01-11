@@ -25,7 +25,9 @@ st.markdown("""
 # --- CONNEXION MOTHERDUCK ---
 @st.cache_resource
 def get_motherduck_connection():
-     if not MOTHERDUCK_TOKEN:
+    """Connexion à MotherDuck (fail-fast, sans try/except)."""
+    
+    if not MOTHERDUCK_TOKEN:
         st.error("❌ Token MotherDuck manquant")
         st.stop()
 
@@ -36,7 +38,6 @@ def get_motherduck_connection():
     return duckdb.connect(
         f"md:{MOTHERDUCK_DATABASE}?motherduck_token={MOTHERDUCK_TOKEN}"
     )
-
 
 db = get_motherduck_connection()
 # --- CHARGEMENT DES DONNÉES ---
