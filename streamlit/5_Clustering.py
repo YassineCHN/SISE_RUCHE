@@ -18,23 +18,21 @@ dovenv_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__fil
 load_dotenv(dovenv_path)
 MOTHERDUCK_TOKEN = os.getenv("MOTHERDUCK_TOKEN")
 @st.cache_resource
+@st.cache_resource
 def get_motherduck_connection():
-    """Connexion au DataWhareHouse"""
-    try:
-        if not MOTHERDUCK_TOKEN:
-            st.error(" Missing MotherDuck Token")
-            st.stop()
-        
-        con = duckdb.connect(f"md:?motherduck_token={MOTHERDUCK_TOKEN}")
-        con.execute(f"CREATE DATABASE IF NOT EXISTS {MOTHERDUCK_DATABASE}")
-        con.close()
-        con = duckdb.connect(f"md:{MOTHERDUCK_DATABASE}?motherduck_token={MOTHERDUCK_TOKEN}")
-        
-        return con
-        
-    except Exception as e:
-        st.error(f"Erreur de connexion : {e}")
+    """Connexion à MotherDuck (fail-fast, sans try/except)."""
+    
+    if not MOTHERDUCK_TOKEN:
+        st.error("❌ Token MotherDuck manquant")
         st.stop()
+
+    con = duckdb.connect(f"md:?motherduck_token={MOTHERDUCK_TOKEN}")
+    con.execute(f"CREATE DATABASE IF NOT EXISTS {MOTHERDUCK_DATABASE}")
+    con.close()
+
+    return duckdb.connect(
+        f"md:{MOTHERDUCK_DATABASE}?motherduck_token={MOTHERDUCK_TOKEN}"
+    )
 
 con = get_motherduck_connection()
 
