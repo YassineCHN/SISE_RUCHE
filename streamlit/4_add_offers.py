@@ -144,6 +144,7 @@ with tab1:
     st.subheader("Nouvelle offre (insertion en base)")
 
     with st.form("add_offer_form", enter_to_submit=False):
+        st.markdown("### Champs importants ❗: ")
         colA, colB = st.columns(2)
 
         with colA:
@@ -152,20 +153,8 @@ with tab1:
                 "URL source (optionnel)", placeholder="https://..."
             )
             company_name = st.text_input("Entreprise", placeholder="Ex: Acme SAS")
-            company_description = st.text_area(
-                "Description de l'entreprise (optionnel)"
-            )
+
             description = st.text_area("Description *", height=180)
-            # FK ville: pour rester safe, on force sélection dimension existante
-            ville = st.selectbox(
-                "Ville (dimension) *",
-                options=list(ville_label_to_id.keys()),
-                index=(
-                    list(ville_label_to_id.keys()).index("UNKNOWN")
-                    if "UNKNOWN" in ville_label_to_id
-                    else 0
-                ),
-            )
 
         with colB:
 
@@ -184,19 +173,17 @@ with tab1:
             duree_contrat_mois = (
                 None if duree_contrat_mois == 0 else int(duree_contrat_mois)
             )
-            publication_date = st.date_input(
-                "Date de publication *", value=dt.date.today(), format="DD/MM/YYYY"
-            )
-            experience_years = st.slider(
-                "Années d'expérience requises", min_value=0, max_value=15, value=0
-            )
-            experience_required = st.text_input(
-                "Expérience spécifique requise (texte libre)",
-                placeholder="Ex: 2 ans sur un poste similaire",
+            ville = st.selectbox(
+                "Ville (dimension) *",
+                options=list(ville_label_to_id.keys()),
+                index=(
+                    list(ville_label_to_id.keys()).index("UNKNOWN")
+                    if "UNKNOWN" in ville_label_to_id
+                    else 0
+                ),
             )
 
             is_teletravail = st.checkbox("Télétravail", value=False)
-
             SALARY_OPTIONS = [
                 "< 25k€",
                 "25k€ - 30k€",
@@ -273,62 +260,80 @@ with tab1:
                 if st.session_state.start_mode == "Dès que possible"
                 else f"{st.session_state.start_month} {st.session_state.start_year}"
             )
+        HARD_SKILLS_REF = [
+            "Python",
+            "SQL",
+            "Power BI",
+            "Tableau",
+            "Airflow",
+            "Spark",
+            "Docker",
+            "Git",
+            "Machine Learning",
+            "Deep Learning",
+        ]
+        SOFT_SKILLS_REF = [
+            "Communication",
+            "Autonomie",
+            "Esprit d’analyse",
+            "Travail en équipe",
+            "Rigueur",
+            "Curiosité",
+        ]
+        LANGUAGES_REF = ["Français", "Anglais", "Espagnol", "Allemand"]
+        st.divider()
+        st.markdown("### Compétences 🧰:")
 
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            hard_skills = st.multiselect(
+                "Hard skills",
+                options=HARD_SKILLS_REF,
+                default=[],
+                accept_new_options=True,
+            )
+        with col2:
+            soft_skills = st.multiselect(
+                "Soft skills",
+                options=SOFT_SKILLS_REF,
+                default=[],
+                accept_new_options=True,
+            )
+        with col3:
+            langages = st.multiselect(
+                "Langages",
+                options=LANGUAGES_REF,
+                default=[],
+                accept_new_options=True,
+            )
         with st.expander("➕ Champs optionnels"):
-            education_level_raw = st.selectbox(
-                "Niveau d'études", options=EDU_OPTIONS, index=0
-            )
-            job_function = st.text_input(
-                "Job function (optionnel)", placeholder="Ex: Data / BI / Analytics"
-            )
-            job_grade = st.text_input(
-                "Job grade (optionnel)", placeholder="Ex: Junior / Senior / Cadre"
-            )
-            st.divider()
-            HARD_SKILLS_REF = [
-                "Python",
-                "SQL",
-                "Power BI",
-                "Tableau",
-                "Airflow",
-                "Spark",
-                "Docker",
-                "Git",
-                "Machine Learning",
-                "Deep Learning",
-            ]
-            SOFT_SKILLS_REF = [
-                "Communication",
-                "Autonomie",
-                "Esprit d’analyse",
-                "Travail en équipe",
-                "Rigueur",
-                "Curiosité",
-            ]
-            LANGUAGES_REF = ["Français", "Anglais", "Espagnol", "Allemand"]
-            st.markdown("### Compétences")
-            col1, col2, col3 = st.columns(3)
+            col1, col2 = st.columns(2)
             with col1:
-                hard_skills = st.multiselect(
-                    "Hard skills",
-                    options=HARD_SKILLS_REF,
-                    default=[],
-                    accept_new_options=True,
+                company_description = st.text_area(
+                    "Description de l'entreprise", height=100
+                )
+
+                job_grade = st.text_input(
+                    "Job grade", placeholder="Ex: Junior / Senior / Cadre"
+                )
+                job_function = st.text_input(
+                    "Job function", placeholder="Ex: Data / BI / Analytics"
                 )
             with col2:
-                soft_skills = st.multiselect(
-                    "Soft skills",
-                    options=SOFT_SKILLS_REF,
-                    default=[],
-                    accept_new_options=True,
+                publication_date = st.date_input(
+                    "Date de publication", value=dt.date.today(), format="DD/MM/YYYY"
                 )
-            with col3:
-                langages = st.multiselect(
-                    "Langages",
-                    options=LANGUAGES_REF,
-                    default=[],
-                    accept_new_options=True,
+                education_level_raw = st.selectbox(
+                    "Niveau d'études", options=EDU_OPTIONS, index=0
                 )
+                experience_required = st.text_input(
+                    "Expérience spécifique requise",
+                    placeholder="Ex: 2 ans sur un poste similaire",
+                )
+                experience_years = st.slider(
+                    "Années d'expérience requises", min_value=0, max_value=15, value=0
+                )
+
         submit = st.form_submit_button("Ajouter")
 
         if submit:
