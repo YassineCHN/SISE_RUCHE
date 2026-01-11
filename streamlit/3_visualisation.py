@@ -13,6 +13,15 @@ load_dotenv(dovenv_path)
 MOTHERDUCK_TOKEN = os.getenv("MOTHERDUCK_TOKEN")
 
 st.set_page_config(layout="wide", page_title="Visualisation des données", page_icon="💼")
+st.sidebar.image("./static/Logo3.png", width=150)
+st.markdown("""
+<style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+    html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
+    [data-testid="stSidebar"] { background: linear-gradient(180deg, #f8f9fa 0%, #e9ecef 100%); }
+</style>
+""", unsafe_allow_html=True)
+
 # --- CONNEXION MOTHERDUCK ---
 @st.cache_resource
 def get_motherduck_connection():
@@ -250,3 +259,6 @@ with st.container(border=False, horizontal=True, horizontal_alignment="center"):
         "<p style='text-align: center;'>Date de dernière Mise à jour de la BDD : DD//MM//YYYY</p>",
         unsafe_allow_html=True,
     )
+
+st.markdown("<br><br>", unsafe_allow_html=True)
+st.markdown("<div style='text-align: center; color: #718096; font-size: 0.9rem;'>Powered by <strong>MotherDuck</strong> × <strong>Sentence Transformers</strong> | RUCHE Team © 2026</div>", unsafe_allow_html=True)
