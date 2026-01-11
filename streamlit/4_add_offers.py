@@ -92,6 +92,14 @@ Texte de l'offre :
 
 
 st.markdown("# Ajout Offres 🆕")
+st.markdown("""
+<style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+    html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
+    [data-testid="stSidebar"] { background: linear-gradient(180deg, #f8f9fa 0%, #e9ecef 100%); }
+</style>
+""", unsafe_allow_html=True)
+st.sidebar.image("./static/Logo3.png", width=150)
 st.markdown("## 🧠 Assistance IA (optionnelle)")
 
 raw_offer = st.text_area(
@@ -753,3 +761,6 @@ with st.form("add_offer_form", enter_to_submit=False):
             st.dataframe(inserted, width="stretch")
         except Exception as e:
             st.error(f"❌ Insertion échouée: {e}")
+            
+st.markdown("<br><br>", unsafe_allow_html=True)
+st.markdown("<div style='text-align: center; color: #718096; font-size: 0.9rem;'>Powered by <strong>MotherDuck</strong> × <strong>Sentence Transformers</strong> | RUCHE Team © 2026</div>", unsafe_allow_html=True)
