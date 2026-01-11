@@ -25,10 +25,8 @@ from config import (
 def create_chrome_driver(for_scraping: bool = False) -> webdriver.Chrome:
     """
     Crée un driver Chrome avec les options optimisées.
-    
     Args:
         for_scraping: Si True, ajoute des optimisations pour le scraping
-        
     Returns:
         Instance de ChromeDriver
     """
@@ -53,7 +51,6 @@ def find_offers_for_keyword(keyword: str, driver: webdriver.Chrome) -> List[str]
     Args:
         keyword: Mot-clé de recherche
         driver: Instance de ChromeDriver
-        
     Returns:
         Liste d'URLs d'offres
     """
@@ -143,7 +140,6 @@ def scrape_offer(url: str) -> Optional[Dict]:
     
     Args:
         url: URL de l'offre
-        
     Returns:
         Dictionnaire avec le contenu brut ou None si échec
     """

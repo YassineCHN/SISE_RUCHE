@@ -26,24 +26,19 @@ st.set_page_config(page_title="Cartographie", page_icon="🗺️", layout="wide"
 
 @st.cache_resource
 def get_motherduck_connection():
-    """Connexion à MotherDuck"""
-    try:
-        if not MOTHERDUCK_TOKEN:
-            st.error("❌ Token MotherDuck manquant")
-            st.stop()
-        
-        con = duckdb.connect(f"md:?motherduck_token={MOTHERDUCK_TOKEN}")
-        con.execute(f"CREATE DATABASE IF NOT EXISTS {MOTHERDUCK_DATABASE}")
-        con.close()
-        con = duckdb.connect(f"md:{MOTHERDUCK_DATABASE}?motherduck_token={MOTHERDUCK_TOKEN}")
-        
-        return con
-        
-    except Exception as e:
-        st.error(f"❌ Erreur de connexion : {e}")
+    """Connexion à MotherDuck (fail-fast, sans try/except)."""
+    
+    if not MOTHERDUCK_TOKEN:
+        st.error("❌ Token MotherDuck manquant")
         st.stop()
 
-conn = get_motherduck_connection()
+    con = duckdb.connect(f"md:?motherduck_token={MOTHERDUCK_TOKEN}")
+    con.execute(f"CREATE DATABASE IF NOT EXISTS {MOTHERDUCK_DATABASE}")
+    con.close()
+
+    return duckdb.connect(
+        f"md:{MOTHERDUCK_DATABASE}?motherduck_token={MOTHERDUCK_TOKEN}"
+    )
 
 # ============================================================================
 # RÉCUPÉRATION DES VALEURS UNIQUES POUR LES FILTRES
