@@ -1,13 +1,13 @@
 import os
+import duckdb
 import uuid
 import datetime as dt
 import streamlit as st
 import pandas as pd
-import duckdb
+from ruche.db import get_connection
 import sys
 from pathlib import Path
 from dotenv import find_dotenv, load_dotenv
-from config import MOTHERDUCK_DATABASE
 import nltk
 from nltk.corpus import stopwords
 import re
@@ -92,13 +92,16 @@ Texte de l'offre :
 
 
 st.markdown("# Ajout Offres 🆕")
-st.markdown("""
+st.markdown(
+    """
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
     html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
     [data-testid="stSidebar"] { background: linear-gradient(180deg, #f8f9fa 0%, #e9ecef 100%); }
 </style>
-""", unsafe_allow_html=True)
+""",
+    unsafe_allow_html=True,
+)
 st.sidebar.image("./static/Logo3.png", width=150)
 st.markdown("## 🧠 Assistance IA (optionnelle)")
 
@@ -177,38 +180,6 @@ def normalize_llm_list(value):
         return [v.strip() for v in value.split(";") if v.strip()]
 
     return []
-
-
-def connect_duckdb_local() -> duckdb.DuckDBPyConnection:
-    """
-    Connexion DuckDB locale — DOIT pointer vers la base créée par l’ETL.
-    """
-    project_root = Path(__file__).resolve().parents[1]
-    duckdb_path = project_root / "data" / "local.duckdb"
-
-    duckdb_path.parent.mkdir(parents=True, exist_ok=True)
-    return duckdb.connect(str(duckdb_path))
-
-
-def connect_motherduck() -> duckdb.DuckDBPyConnection:
-    """
-    Connexion MotherDuck — base distante unique.
-    """
-    return duckdb.connect(
-        f"md:{MOTHERDUCK_DATABASE}?motherduck_token={MOTHERDUCK_TOKEN}"
-    )
-
-
-@st.cache_resource(show_spinner=False)
-def get_connection(mode: str) -> duckdb.DuckDBPyConnection:
-    """
-    Cache Streamlit SAFE
-    - clé = mode ('Local' ou 'MotherDuck')
-    - une connexion par base
-    """
-    if mode == "MotherDuck":
-        return connect_motherduck()
-    return connect_duckdb_local()
 
 
 # -----------------------------
@@ -360,10 +331,7 @@ def detect_duplicate_streamlit(
 # -----------------------------
 # UI / Form
 # -----------------------------
-st.caption("Choisis la base cible (local ou MotherDuck).")
-
-mode = st.radio("Base", ["Local DuckDB", "MotherDuck"], horizontal=True)
-con = get_connection("MotherDuck" if mode == "MotherDuck" else "Local DuckDB")
+con = get_connection()
 st.session_state["duckdb_connection"] = con
 
 # Charger dimensions
@@ -761,6 +729,9 @@ with st.form("add_offer_form", enter_to_submit=False):
             st.dataframe(inserted, width="stretch")
         except Exception as e:
             st.error(f"❌ Insertion échouée: {e}")
-            
+
 st.markdown("<br><br>", unsafe_allow_html=True)
-st.markdown("<div style='text-align: center; color: #718096; font-size: 0.9rem;'>Powered by <strong>MotherDuck</strong> × <strong>Sentence Transformers</strong> | RUCHE Team © 2026</div>", unsafe_allow_html=True)
+st.markdown(
+    "<div style='text-align: center; color: #718096; font-size: 0.9rem;'>Powered by <strong>MotherDuck</strong> × <strong>Sentence Transformers</strong> | RUCHE Team © 2026</div>",
+    unsafe_allow_html=True,
+)

@@ -3,7 +3,12 @@ import numpy as np
 import pandas as pd
 import time
 import atexit
+import sys
+from pathlib import Path
 
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 st.set_page_config(layout="wide")
 
 # Define the pages

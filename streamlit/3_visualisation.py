@@ -1,16 +1,11 @@
 import os
 import streamlit as st
-from sympy import re
-import duckdb
+from sympy import re 
 import pandas as pd
 import plotly.express as px
-from config import MOTHERDUCK_DATABASE
 from dotenv import load_dotenv
+from ruche.db import get_connection
 
-# --- CHARGEMENT DES VARIABLES D'ENVIRONNEMENT ---
-dovenv_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), '.env')
-load_dotenv(dovenv_path)
-MOTHERDUCK_TOKEN = os.getenv("MOTHERDUCK_TOKEN")
 
 st.set_page_config(layout="wide", page_title="Visualisation des données", page_icon="💼")
 st.sidebar.image("./static/Logo3.png", width=150)
@@ -23,23 +18,9 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # --- CONNEXION MOTHERDUCK ---
-@st.cache_resource
-def get_motherduck_connection():
-    """Connexion à MotherDuck (fail-fast, sans try/except)."""
-    
-    if not MOTHERDUCK_TOKEN:
-        st.error("❌ Token MotherDuck manquant")
-        st.stop()
 
-    con = duckdb.connect(f"md:?motherduck_token={MOTHERDUCK_TOKEN}")
-    con.execute(f"CREATE DATABASE IF NOT EXISTS {MOTHERDUCK_DATABASE}")
-    con.close()
 
-    return duckdb.connect(
-        f"md:{MOTHERDUCK_DATABASE}?motherduck_token={MOTHERDUCK_TOKEN}"
-    )
-
-db = get_motherduck_connection()
+db = get_connection()
 # --- CHARGEMENT DES DONNÉES ---
 @st.cache_data
 def load_data():

@@ -1,8 +1,7 @@
 import streamlit as st
-import duckdb
 import pandas as pd
 from sentence_transformers import SentenceTransformer
-from config import MOTHERDUCK_DATABASE
+from ruche.db import get_connection
 import numpy as np
 import html
 import os
@@ -18,7 +17,8 @@ if not token:
 MOTHERDUCK_TOKEN = token
 st.set_page_config(layout="wide", page_title="Recherche Sémantique", page_icon="🔍")
 
-st.markdown("""
+st.markdown(
+    """
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
     html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
@@ -110,70 +110,91 @@ st.markdown("""
     .skills-text { font-size: 0.9rem; color: #4a5568; line-height: 1.5; }
     hr { margin: 2rem 0; border: none; border-top: 1px solid #e9ecef; }
 </style>
-""", unsafe_allow_html=True)
+""",
+    unsafe_allow_html=True,
+)
 
 st.sidebar.image("./static/Logo3.png", width=150)
 st.sidebar.markdown("# Filtres")
 
-st.markdown("""
+st.markdown(
+    """
 <div class="search-header">
     <h1>Trouvez votre futur job Data & IA</h1>
     <p>Le moteur de recherche sémantique intelligent qui comprend votre langage,<br>pas juste vos mots-clés.</p>
 </div>
-""", unsafe_allow_html=True)
+""",
+    unsafe_allow_html=True,
+)
+
 
 @st.cache_resource
 def load_model():
-    return SentenceTransformer("sentence-transformers/paraphrase-multilingual-mpnet-base-v2")
+    return SentenceTransformer(
+        "sentence-transformers/paraphrase-multilingual-mpnet-base-v2"
+    )
 
-@st.cache_resource
-def get_connection():
-    return duckdb.connect(f"md:{MOTHERDUCK_DATABASE}?motherduck_token={MOTHERDUCK_TOKEN}")
 
 @st.cache_data(ttl=3600)
 def get_total_offers():
     con = get_connection()
-    return con.execute("SELECT COUNT(*) FROM f_offre WHERE embedding IS NOT NULL").fetchone()[0]
+    return con.execute(
+        "SELECT COUNT(*) FROM f_offre WHERE embedding IS NOT NULL"
+    ).fetchone()[0]
+
 
 @st.cache_data(ttl=3600)
 def get_regions():
     """Récupère les régions distinctes (sans UNKNOWN)"""
     con = get_connection()
     try:
-        regions = con.execute("""
+        regions = (
+            con.execute(
+                """
             SELECT DISTINCT nom_region 
             FROM h_region 
             WHERE nom_region IS NOT NULL 
                 AND nom_region != 'UNKNOWN'
             ORDER BY nom_region
-        """).fetchdf()['nom_region'].tolist()
+        """
+            )
+            .fetchdf()["nom_region"]
+            .tolist()
+        )
         return regions
     except Exception as e:
         st.error(f"Erreur chargement régions: {e}")
         return []
 
-def semantic_search(query_embedding: np.ndarray, top_k: int = 50, 
-                    region_filter: list = None, contract_filters: dict = None,
-                    min_similarity: float = 0.0) -> pd.DataFrame:
+
+def semantic_search(
+    query_embedding: np.ndarray,
+    top_k: int = 50,
+    region_filter: list = None,
+    contract_filters: dict = None,
+    min_similarity: float = 0.0,
+) -> pd.DataFrame:
     con = get_connection()
     embedding_list = query_embedding.tolist()
-    
+
     where_clauses = ["f.embedding IS NOT NULL", "f.is_duplicate = FALSE"]
-    
+
     # Filtre par région
     if region_filter and len(region_filter) > 0:
         regions_sql = "', '".join([r.replace("'", "''") for r in region_filter])
         where_clauses.append(f"r.nom_region IN ('{regions_sql}')")
-    
+
     # Filtre par contrat (checkboxes)
     if contract_filters:
         selected_contracts = [k for k, v in contract_filters.items() if v]
         if selected_contracts:
-            contracts_sql = "', '".join([c.replace("'", "''") for c in selected_contracts])
+            contracts_sql = "', '".join(
+                [c.replace("'", "''") for c in selected_contracts]
+            )
             where_clauses.append(f"c.type_contrat IN ('{contracts_sql}')")
-    
+
     where_sql = " AND ".join(where_clauses)
-    
+
     query = f"""
     WITH scored AS (
         SELECT 
@@ -195,79 +216,95 @@ def semantic_search(query_embedding: np.ndarray, top_k: int = 50,
     ORDER BY similarity_score DESC
     LIMIT {top_k}
     """
-    
+
     try:
         return con.execute(query, [embedding_list]).fetchdf()
     except Exception as e:
         st.error(f"Erreur recherche: {e}")
         return pd.DataFrame()
 
+
 def render_job_card_native(job: dict):
     with st.container():
         st.markdown('<div class="job-card">', unsafe_allow_html=True)
-        
+
         title = html.escape(job.get("title") or "Sans titre")
         source_url = job.get("source_url") or ""
-        
+
         if source_url:
-            st.markdown(f'<div class="job-title"><a href="{source_url}" target="_blank">{title}</a></div>', unsafe_allow_html=True)
+            st.markdown(
+                f'<div class="job-title"><a href="{source_url}" target="_blank">{title}</a></div>',
+                unsafe_allow_html=True,
+            )
         else:
             st.markdown(f'<div class="job-title">{title}</div>', unsafe_allow_html=True)
-        
+
         company = html.escape(job.get("company_name") or "Entreprise non spécifiée")
         st.markdown(f'<div class="job-company">{company}</div>', unsafe_allow_html=True)
-        
+
         ville = html.escape(job.get("ville") or "Non spécifié")
         region = html.escape(job.get("region") or "")
         code_postal = html.escape(job.get("code_postal") or "")
-        
+
         location_parts = []
         if ville:
             location_parts.append(f"{ville} ({code_postal})" if code_postal else ville)
         if region:
             location_parts.append(region)
         location = " • ".join(location_parts) if location_parts else "Non spécifié"
-        
+
         contrat = html.escape(job.get("type_contrat") or "Non spécifié")
         score = job.get("similarity_score", 0)
-        
-        st.markdown(f"""
+
+        st.markdown(
+            f"""
         <div class="badge-container">
             <span class="badge badge-location">📍 {location}</span>
             <span class="badge badge-contract">📋 {contrat}</span>
             <span class="badge badge-score">⭐ {score:.1f}%</span>
         </div>
-        """, unsafe_allow_html=True)
-        
+        """,
+            unsafe_allow_html=True,
+        )
+
         description = job.get("description") or ""
         if description:
-            preview = description[:200] + "..." if len(description) > 200 else description
-            preview_safe = html.escape(preview).replace('\n', '<br>')
-            
-            st.markdown(f'<div style="color: #4a5568; font-size: 0.95rem; margin: 1rem 0; line-height: 1.6;">{preview_safe}</div>', unsafe_allow_html=True)
-            
+            preview = (
+                description[:200] + "..." if len(description) > 200 else description
+            )
+            preview_safe = html.escape(preview).replace("\n", "<br>")
+
+            st.markdown(
+                f'<div style="color: #4a5568; font-size: 0.95rem; margin: 1rem 0; line-height: 1.6;">{preview_safe}</div>',
+                unsafe_allow_html=True,
+            )
+
             if len(description) > 200:
                 with st.expander("📖 Lire la suite"):
                     st.text(description)
-        
+
         hard_skills = job.get("hard_skills") or ""
         if hard_skills:
             skills_safe = html.escape(hard_skills)
-            st.markdown(f"""
+            st.markdown(
+                f"""
             <div class="skills-section">
                 <div class="skills-label">Compétences requises</div>
                 <div class="skills-text">{skills_safe}</div>
             </div>
-            """, unsafe_allow_html=True)
-        
-        st.markdown('</div>', unsafe_allow_html=True)
+            """,
+                unsafe_allow_html=True,
+            )
+
+        st.markdown("</div>", unsafe_allow_html=True)
+
 
 with st.spinner("🤖 Chargement du modèle IA..."):
     model = load_model()
 
 with st.sidebar:
-    #st.markdown("### ⚙️ Paramètres de recherche")
-    
+    # st.markdown("### ⚙️ Paramètres de recherche")
+
     # Filtre Région (multiselect)
     regions = get_regions()
     st.markdown("#### Région")
@@ -275,9 +312,9 @@ with st.sidebar:
         "Sélectionnez une ou plusieurs régions",
         options=regions,
         default=[],
-        label_visibility="collapsed"
+        label_visibility="collapsed",
     )
-    
+
     # Filtre Type de contrat (checkboxes)
     st.markdown("#### Type de contrat")
     filter_cdi = st.checkbox("CDI", value=False)
@@ -287,31 +324,33 @@ with st.sidebar:
     filter_freelance = st.checkbox("Freelance", value=False)
     filter_interim = st.checkbox("Intérim", value=False)
     filter_public = st.checkbox("Contrat public", value=False)
-    
+
     st.markdown("---")
-    
+
     min_similarity = st.slider(
         "🎯 Score minimum de pertinence (%)",
         min_value=0,
         max_value=100,
         value=70,
         step=5,
-        help="Filtrer les offres ayant un score de similarité supérieur ou égal à ce seuil"
+        help="Filtrer les offres ayant un score de similarité supérieur ou égal à ce seuil",
     )
-    
+
     top_k = st.slider("📊 Nombre de résultats", 10, 100, 50, 10)
-    
+
     st.markdown("---")
     st.markdown("### 💡 Conseils de recherche textuelle")
-    st.info("⚙ Data Analyst CDI Île-de-France\n\n⚙ Stage Java/Spark\n\n⚙ ML engineer expérimenté\n\n⚙ Alternance data science Auvergne-Rhône-Alpes")
+    st.info(
+        "⚙ Data Analyst CDI Île-de-France\n\n⚙ Stage Java/Spark\n\n⚙ ML engineer expérimenté\n\n⚙ Alternance data science Auvergne-Rhône-Alpes"
+    )
 
 st.markdown('<div class="search-container">', unsafe_allow_html=True)
 query = st.text_input(
     "",
     placeholder="Ex: Data Scientist Junior NLP à Lyon...",
-    label_visibility="collapsed"
+    label_visibility="collapsed",
 )
-st.markdown('</div>', unsafe_allow_html=True)
+st.markdown("</div>", unsafe_allow_html=True)
 
 col1, col2, col3 = st.columns([1, 3, 1])
 with col1:
@@ -328,31 +367,33 @@ if search_button and query:
         "AUTRE": filter_freelance,
         "CONTRAT_PUBLIC": filter_public,
     }
-    
+
     with st.spinner("🔎 Recherche en cours..."):
         query_embedding = model.encode(query, convert_to_numpy=True)
         results = semantic_search(
-            query_embedding, 
-            top_k, 
+            query_embedding,
+            top_k,
             region_filter if region_filter else None,
             contract_filters if any(contract_filters.values()) else None,
-            min_similarity
+            min_similarity,
         )
-    
+
     if len(results) > 0:
         st.markdown("<br>", unsafe_allow_html=True)
         metric_cols = st.columns(2)
-        
+
         total_offers = get_total_offers()
-        
+
         with metric_cols[0]:
             st.metric("📊 Base de données", f"{total_offers:,} offres")
         with metric_cols[1]:
-            st.metric("⭐ Pertinence moyenne", f"{results['similarity_score'].mean():.1f}%")
-        
+            st.metric(
+                "⭐ Pertinence moyenne", f"{results['similarity_score'].mean():.1f}%"
+            )
+
         st.markdown("---")
         st.markdown(f"### 🎯 {len(results)} résultats trouvés")
-        
+
         for i in range(0, len(results), 2):
             cols = st.columns(2)
             with cols[0]:
@@ -364,9 +405,14 @@ if search_button and query:
             if i + 2 < len(results):
                 st.markdown("<br>", unsafe_allow_html=True)
     else:
-        st.warning("⚠️ Aucun résultat trouvé. Essayez d'abaisser le score minimum de pertinence.")
+        st.warning(
+            "⚠️ Aucun résultat trouvé. Essayez d'abaisser le score minimum de pertinence."
+        )
 elif search_button:
     st.error("❌ Veuillez entrer une requête.")
 
 st.markdown("<br><br>", unsafe_allow_html=True)
-st.markdown("<div style='text-align: center; color: #718096; font-size: 0.9rem;'>Powered by <strong>MotherDuck</strong> × <strong>Sentence Transformers</strong> | RUCHE Team © 2026</div>", unsafe_allow_html=True)
+st.markdown(
+    "<div style='text-align: center; color: #718096; font-size: 0.9rem;'>Powered by <strong>MotherDuck</strong> × <strong>Sentence Transformers</strong> | RUCHE Team © 2026</div>",
+    unsafe_allow_html=True,
+)
