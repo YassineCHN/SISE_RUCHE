@@ -12,7 +12,7 @@ dovenv_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__fil
 load_dotenv(dovenv_path)
 MOTHERDUCK_TOKEN = os.getenv("MOTHERDUCK_TOKEN")
 
-
+st.set_page_config(layout="wide", page_title="Visualisation des données", page_icon="💼")
 # --- CONNEXION MOTHERDUCK ---
 @st.cache_resource
 def get_motherduck_connection():
@@ -151,7 +151,6 @@ df_clean = df.dropna(subset=['salaire_moyen'])
 df_clean = cluster_job_titles(df_clean)
 
 # --- INTERFACE STREAMLIT ---
-st.markdown("# Visualisation ")
 st.divider()
 st.sidebar.markdown("# Visualisation du Marché de l'Emploi Data et IA")
 
