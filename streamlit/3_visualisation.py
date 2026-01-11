@@ -4,6 +4,9 @@ from sympy import re
 import pandas as pd
 import plotly.express as px
 from dotenv import load_dotenv
+from sentence_transformers import SentenceTransformer
+import umap
+import hdbscan
 from ruche.db import get_connection
 
 
@@ -129,7 +132,6 @@ def cluster_job_titles(df, column='title'):
     return df.merge(mapping_df[[column, 'titre_standardise']], on=column, how='left')
     
     # --- PRÉPARATION DES DONNÉES ---
-@st.cache_data
 df = load_data()
 df['salaire_moyen'] = df['salaire'].apply(parse_salary_range)
 # Suppression des lignes où le salaire n'a pas pu être extrait
