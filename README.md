@@ -5,13 +5,75 @@ Projet NLP & Text Mining – Master 2 SISE (2025–2026)
 
 ![Logo](streamlit/static/Logo3.png)
 
+## Présentation du projet
+
+**RUCHE** est une plateforme d’analyse du marché de l’emploi **Data Science & Intelligence Artificielle** en France.  
+Elle combine **web scraping**, **NLP**, **machine learning**, **data warehousing** et **visualisation interactive** pour proposer :
+
+-  **Une recherche sémantique intelligente** d’offres d’emploi  
+-  **Une cartographie géographique interactive** du marché de l’emploi  
+-  **Des analyses avancées** sur les salaires, les compétences et les tendances du marché
+-  **Enregistrement de nouvelles offres** pour les utilisateurs de l'application
+
+Le système repose sur une **architecture end-to-end**, depuis la collecte des données jusqu’à leur exploitation analytique au sein d’une application **Streamlit**.
+
 ## Architecture
+
 ```
-RUCHE_datalake (MongoDB Database)
-├── francetravail_raw    # France Travail job offers
-├── apec_raw             # APEC job offers
-├── jobteaser_raw        # JobTeaser job offers
-└── ...                  # Other sources
+RUCHE/
+├── data/
+│   ├── backup_job_market.duckdb
+│   └── local.duckdb
+│
+├── scraping/
+│   ├── francetravail/
+│   ├── apec/
+│   ├── jobteaser/
+│   └── service_public/
+│
+├── mongodb/
+│   ├── main_mongo.py
+│   ├── reference_apec.py
+│   ├── mongodb_load_jobteaser.py
+│   └── mongodb_utils.py
+│
+├── etl/
+│   ├── cleanX.py #Tout les "clean" fpnction de nettoyage de donnée
+│   ├── config_etl.py
+│   ├── etl_utils.py
+│   ├── etl_vectorization.py
+│   ├── tfidf_ml_data_filter.py
+│   ├── geolocation_enrichment.py # API pour longétude et latitude 
+│   └── etl_motherduck.py
+│
+├── streamlit_app/
+│   ├── 1_home_page.py
+│   ├── 2_cartographie.py
+│   ├── 3_visualisation.py
+│   ├── 4_add_offers.py
+│   ├── 5_clustering.py
+│   ├── 6_graphe_competences.py
+│   ├── 7_llm.py
+│   ├── 8_about.py
+│   ├── app.py
+│   ├── config.py
+│   ├── static/ # Logo & images
+│   ├── db/
+│   └── analyse_competences/
+│
+├── docs/
+│   ├── Rapport.md
+│   ├── notice_france_travail_scraper.md
+│   ├── notice_TFIDF_ML_filtre_data_nondata.md
+│   └── notice_moteur_recherche_semantique.md
+│
+├── duck_to_mother.py
+├── pyproject.toml
+├── requirements.txt
+├── test_connexion_duckdb.py
+├── test_creation_duckdb.py
+└── README.md
+
 ```
 
 ## Setup
