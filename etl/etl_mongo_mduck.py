@@ -661,9 +661,7 @@ def create_unified_dataset(limit: Optional[int] = LIMIT) -> pd.DataFrame:
     # Nettoyage minimal obligatoire
     df = df.replace("", np.nan)
     perform_eda(df)
-    # df = detect_duplicates_nlp(df, threshold=SIMILARITY_THRESHOLD)
-    df["is_duplicate"] = False
-    df["similarity_score"] = 0.0
+    df = detect_duplicates_nlp(df, threshold=SIMILARITY_THRESHOLD)
 
     print(f"✓ ETL Complete: {df.shape}\n")
     return df

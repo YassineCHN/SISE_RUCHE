@@ -39,12 +39,11 @@ limit = st.sidebar.slider(
 
 # Filtre contrat
 st.sidebar.markdown("###  Type de contrat")
-filter_cdi = st.sidebar.checkbox("CDI", value=False)
-filter_cdd = st.sidebar.checkbox("CDD", value=False)
-filter_stage = st.sidebar.checkbox("Stage", value=False)
-filter_alternance = st.sidebar.checkbox("Alternance / Apprentissage", value=False)
-filter_freelance = st.sidebar.checkbox("Freelance", value=False)
-filter_interim = st.sidebar.checkbox("Intérim", value=False)
+contract_filter = st.sidebar.multiselect(
+    "Sélectionner un ou plusieurs types de contrat",
+    options=['Tous','CDI', 'CDD', 'CONTRAT_PUBLIC', 'INTERIM', 'ALTERNANCE', 'STAGE', 'AUTRE'],
+    default=['Tous']
+)
 
 
 
@@ -75,7 +74,7 @@ if st.sidebar.button("🔄 Réinitialiser les filtres", use_container_width=True
 # ------------------------
 @st.cache_data
 
-def load_data(con, limit, contract_filters=None, date_filter='Toutes', region_filter='Toutes'):
+def load_data(con, limit, contract_filter='Tous', date_filter='Toutes', region_filter='Toutes'):
     con = duckdb.connect(MOTHERDUCK_DATABASE)
     
     """Charge les données avec filtres appliqués"""
@@ -95,23 +94,8 @@ def load_data(con, limit, contract_filters=None, date_filter='Toutes', region_fi
         LIMIT {limit}
         
         # Filtre contrat
-    if contract_filters:
-        conditions = []
-        if contract_filters.get('cdi'):
-            conditions.append("c.is_cdi = TRUE")
-        if contract_filters.get('cdd'):
-            conditions.append("c.is_cdd = TRUE")
-        if contract_filters.get('stage'):
-            conditions.append("c.is_stage = TRUE")
-        if contract_filters.get('alternance'):
-            conditions.append("c.is_apprentissage = TRUE")
-        if contract_filters.get('freelance'):
-            conditions.append("c.is_freelance = TRUE")
-        if contract_filters.get('interim'):
-            conditions.append("c.is_interim = TRUE")
-        
-        if conditions:
-            query += "\n    AND (" + " OR ".join(conditions) + ")"
+    if contract_filter and 'Tous' not in contract_filter:
+        query += "\n    AND c.type_contrat IN ('" + "', '".join(contract_filter) + "')"
         
          # Filtre date
     if date_filter == '7 jours':
@@ -130,16 +114,6 @@ def load_data(con, limit, contract_filters=None, date_filter='Toutes', region_fi
     df = con.execute(query).df()
     con.close()
     return df
-
-# Préparer les filtres
-contract_filters = {
-    'cdi': filter_cdi,
-    'cdd': filter_cdd,
-    'stage': filter_stage,
-    'alternance': filter_alternance,
-    'freelance': filter_freelance,
-    'interim': filter_interim
-}
 
 # ------------------------
 # FEATURE ENGINEERING
@@ -184,7 +158,9 @@ def label_clusters(df, cluster_col="cluster_id", top_n=3):
 # -----------------------------------
 # CHARGEMENT DES DONNEES ET CALCULS
 # -----------------------------------
-df = load_data(limit, contract_filters=contract_filters if any(contract_filters.values()) else None, date_filter=date_filter, region_filter=region_filter)
+df = load_data(limit, contract_filter=contract_filter, 
+               date_filter=date_filter, 
+               region_filter=region_filter)
 
 st.caption(f"📄 {len(df)} offres analysées après filtres")
 df["ml_text"] = df.apply(build_ml_text, axis=1)
