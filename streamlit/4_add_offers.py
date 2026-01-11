@@ -4,17 +4,25 @@ import datetime as dt
 import streamlit as st
 import pandas as pd
 import duckdb
+import sys
 from pathlib import Path
-
-
 from dotenv import find_dotenv, load_dotenv
 from config import MOTHERDUCK_DATABASE
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+sys.path.append(str(PROJECT_ROOT))
+
 
 load_dotenv(find_dotenv())
 token = os.getenv("MOTHERDUCK_TOKEN")
 MOTHERDUCK_TOKEN = token
 
-# from etl.etl_utils import (    normalize_company_name,    normalize_education_level,    serialize_list,    force_list,)
+from etl.etl_utils import (
+    normalize_company_name,
+    normalize_education_level,
+    serialize_list,
+    force_list,
+)
 
 # -----------------------------
 # Page config
@@ -335,9 +343,9 @@ with tab1:
                 )
 
         submit = st.form_submit_button("Ajouter")
-
         if submit:
-            # Validations minimales
+
+            # Validations
             errors = []
             if not title.strip():
                 errors.append("Le champ **Titre** est obligatoire.")
@@ -347,41 +355,38 @@ with tab1:
                 errors.append("Type de contrat invalide.")
             if ville not in ville_label_to_id:
                 errors.append("Ville invalide (dimension).")
-
             if errors:
                 for e in errors:
                     st.error(e)
-                st.stop()
+                    st.stop()
 
-        # Normalisations ETL
-        company_name_norm = normalize_company_name(company_name)
-        education_level_norm = normalize_education_level(education_level_raw)
+            # Normalisations ETL
+            company_name_norm = normalize_company_name(company_name)
+            education_level_norm = normalize_education_level(education_level_raw)
 
-        # Multi-valeurs → listes → JSON TEXT
-        hard_list = [x.strip() for x in hard_skills.splitlines() if x.strip()]
-        soft_list = [x.strip() for x in soft_skills.splitlines() if x.strip()]
-        lang_list = [x.strip() for x in langages.splitlines() if x.strip()]
+            # Multi-valeurs → listes → JSON TEXT
+            hard_list = list(dict.fromkeys(hard_skills))
+            soft_list = list(dict.fromkeys(soft_skills))
+            lang_list = list(dict.fromkeys(langages))
 
-        hard_json = serialize_list(force_list(hard_list))
-        soft_json = serialize_list(force_list(soft_list))
-        lang_json = serialize_list(force_list(lang_list))
+            hard_json = serialize_list(force_list(hard_list))
+            soft_json = serialize_list(force_list(soft_list))
+            lang_json = serialize_list(force_list(lang_list))
 
-        # FK
-        id_contrat = int(contract_label_to_id[contract_type])
-        id_ville = int(ville_label_to_id[ville])
-        id_date_publication = get_or_create_date_id(con, publication_date)
+            # FK
+            id_contrat = int(contract_label_to_id[contract_type])
+            id_ville = int(ville_label_to_id[ville])
+            id_date_publication = get_or_create_date_id(con, publication_date)
 
-        # ID + scraped_at
-        job_id = str(uuid.uuid4())
-        scraped_at = dt.date.today()
+            # ID + scraped_at
+            job_id = str(uuid.uuid4())
+            scraped_at = dt.date.today()
+            source_platform = "STREAMLIT"
 
-        # Champs manquants/optionnels
-        source_platform = "STREAMLIT"
-
-        # Insert fact
-        try:
-            con.execute(
-                """
+            # Insert fact
+            try:
+                con.execute(
+                    """
                 INSERT INTO f_offre (
                     job_id, source_platform, source_url, scraped_at,
                     title, description,
@@ -407,47 +412,44 @@ with tab1:
                     ?, ?
                 )
                 """,
-                [
-                    job_id,
-                    source_platform,
-                    source_url or None,
-                    scraped_at,
-                    title,
-                    description,
-                    company_name_norm,
-                    company_description or None,
-                    int(experience_years) if experience_years is not None else None,
-                    experience_required or None,
-                    id_ville,
-                    id_contrat,
-                    duree_contrat_mois,
-                    id_date_publication,
-                    start_date or None,
-                    bool(is_teletravail),
-                    salaire or None,
-                    hard_json,
-                    soft_json,
-                    lang_json,
-                    education_level_norm,
-                    job_function or None,
-                    job_grade or None,
-                    False,
-                    0.0,
-                ],
-            )
-
-            st.success("✅ Offre ajoutée avec succès !")
-            st.info(f"job_id = {job_id}")
-
-            # Petit check d’affichage
-            inserted = con.execute(
-                "SELECT job_id, title, company_name, id_ville, id_contrat, id_date_publication FROM f_offre WHERE job_id = ?",
-                [job_id],
-            ).fetchdf()
-            st.dataframe(inserted, use_container_width=True)
-
-        except Exception as e:
-            st.error(f"❌ Insertion échouée: {e}")
+                    [
+                        job_id,
+                        source_platform,
+                        source_url or None,
+                        scraped_at,
+                        title,
+                        description,
+                        company_name_norm,
+                        company_description or None,
+                        int(experience_years) if experience_years is not None else None,
+                        experience_required or None,
+                        id_ville,
+                        id_contrat,
+                        duree_contrat_mois,
+                        id_date_publication,
+                        start_date or None,
+                        bool(is_teletravail),
+                        salaire or None,
+                        hard_json,
+                        soft_json,
+                        lang_json,
+                        education_level_norm,
+                        job_function or None,
+                        job_grade or None,
+                        False,
+                        0.0,
+                    ],
+                )
+                st.success("✅ Offre ajoutée avec succès !")
+                st.info(f"job_id = {job_id}")
+                # Petit check d’affichage
+                inserted = con.execute(
+                    "SELECT job_id, title, company_name, id_ville, id_contrat, id_date_publication FROM f_offre WHERE job_id = ?",
+                    [job_id],
+                ).fetchdf()
+                st.dataframe(inserted, use_container_width=True)
+            except Exception as e:
+                st.error(f"❌ Insertion échouée: {e}")
 
 with tab2:
     st.subheader("Ajout via scraping (à implémenter)")
