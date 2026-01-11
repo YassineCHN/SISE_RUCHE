@@ -1,4 +1,3 @@
-from pyexpat.errors import messages
 from dotenv import find_dotenv, load_dotenv
 import numpy as np
 import streamlit as st
@@ -23,7 +22,7 @@ st.set_page_config(
 class MistralAPI:
 
     DEFAULT_TEMPERATURE = 0.2
-    DEFAULT_MAX_TOKENS = 1200
+    DEFAULT_MAX_TOKENS = 1900
     DEFAULT_TOP_P = 0.9
 
     def __init__(self, model: str) -> None:
@@ -153,14 +152,18 @@ today = date.today().isoformat()
 
 SYSTEM_PROMPT = f"""
 {role_prompt}
-Tu DOIS répondre UNIQUEMENT avec un JSON valide (pas de markdown, pas de texte autour).
-Respecte EXACTEMENT les clés du schéma ci-dessous (ne rajoute pas de clés).
+Tu DOIS répondre UNIQUEMENT avec un JSON valide.
 
-Règles:
-- Si une info est absente: mets "none" (string) ou 0 pour les champs numériques, ou "UNKNOWN" pour ville/contrat/niveau quand pertinent.
-- Les listes doivent être une string séparée par ';' (ex: "Python;SQL;Docker").
-- is_teletravail doit être un booléen strict (true/false).
-- scraped_at doit être "{today}" (date du scraping aujourd'hui).
+Règles CRITIQUES JSON:
+- Toutes les chaînes de caractères DOIVENT être valides JSON.
+- Dans "description", INTERDICTION d'utiliser des retours à la ligne réels.
+  Utilise \\n à la place.
+- Dans "description", si tu dois inclure des guillemets, utilise \\" (échappement) ou remplace par des apostrophes '.
+
+Autres règles:
+- Respecte EXACTEMENT les clés du schéma ci-dessous (ne rajoute pas de clés).
+- Si une info est absente: mets "none" (string) ou 0 pour les champs numériques, ou "UNKNOWN".
+- scraped_at = "{today}"
 
 Schéma à respecter:
 {SCHEMA_TEXT}
@@ -199,7 +202,8 @@ if query := st.chat_input(""):
 
         except Exception as e:
             with st.chat_message("assistant"):
-                st.error(f"Erreur lors de la génération de la réponse: {e}")
+                st.error("Erreur lors de la génération de la réponse")
+                st.code(str(e), language="text")
 
 if st.button("Clear Conversation", type="primary"):
     st.session_state.messages = []
