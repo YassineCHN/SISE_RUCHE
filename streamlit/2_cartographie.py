@@ -19,6 +19,14 @@ load_dotenv(dovenv_path)
 MOTHERDUCK_TOKEN = os.getenv("MOTHERDUCK_TOKEN")
 
 st.set_page_config(page_title="Cartographie", page_icon="🗺️", layout="wide")
+st.sidebar.image("./static/Logo3.png", width=150)
+st.markdown("""
+<style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+    html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
+    [data-testid="stSidebar"] { background: linear-gradient(180deg, #f8f9fa 0%, #e9ecef 100%); }
+</style>
+""", unsafe_allow_html=True)
 
 # ============================================================================
 # CONNEXION MOTHERDUCK
