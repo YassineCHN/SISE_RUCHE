@@ -24,7 +24,7 @@ st.markdown(
     """
     <h1 style="text-align: center; margin-bottom: 0.2rem;"><b>À propos ℹ️</b></h1>
     <p style="text-align: center; color: #6b7280; font-size: 1.05rem; margin-top: 0;">
-        RUCHE — Réseau Unifié pour la CHerche d’Emploi (Data & IA)
+        RUCHE — Réseau Unifié pour la Recherche d’Emploi (Data & IA)
     </p>
     """,
     unsafe_allow_html=True
