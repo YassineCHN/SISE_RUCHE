@@ -50,6 +50,8 @@ from tfidf_ml_data_filter import filter_data_jobs_ml
 from clean_localisation import extract_city_from_location
 from clean_salary import standardize_salary_column
 from geolocation_enrichment import GeoRefFranceV2, COMPLETE_REGION_MAPPING
+from clean_annee_niveau_exp import clean_experience_data
+
 import time
 
 from etl_utils import (
@@ -696,6 +698,7 @@ def clean_job_data(df: pd.DataFrame, output_file: str = OUTPUT_CLEANED) -> pd.Da
     visualize_duplicates(df)
     df = filter_data_jobs(df)
     df = standardize_salary_column(df, salary_col="salary")
+    df = clean_experience_data(df)
 
     # Export to Excel
     print("=" * 80)
