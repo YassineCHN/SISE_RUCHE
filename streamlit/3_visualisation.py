@@ -25,22 +25,18 @@ st.markdown("""
 # --- CONNEXION MOTHERDUCK ---
 @st.cache_resource
 def get_motherduck_connection():
-    """Connexion à MotherDuck"""
-    try:
-        if not MOTHERDUCK_TOKEN:
-            st.error(" Missing MotherDuck Token")
-            st.stop()
-        
-        con = duckdb.connect(f"md:?motherduck_token={MOTHERDUCK_TOKEN}")
-        con.execute(f"CREATE DATABASE IF NOT EXISTS {MOTHERDUCK_DATABASE}")
-        con.close()
-        con = duckdb.connect(f"md:{MOTHERDUCK_DATABASE}?motherduck_token={MOTHERDUCK_TOKEN}")
-        
-        return con
-        
-    except Exception as e:
-        st.error(f"❌ Erreur de connexion : {e}")
+     if not MOTHERDUCK_TOKEN:
+        st.error("❌ Token MotherDuck manquant")
         st.stop()
+
+    con = duckdb.connect(f"md:?motherduck_token={MOTHERDUCK_TOKEN}")
+    con.execute(f"CREATE DATABASE IF NOT EXISTS {MOTHERDUCK_DATABASE}")
+    con.close()
+
+    return duckdb.connect(
+        f"md:{MOTHERDUCK_DATABASE}?motherduck_token={MOTHERDUCK_TOKEN}"
+    )
+
 
 db = get_motherduck_connection()
 # --- CHARGEMENT DES DONNÉES ---
@@ -60,7 +56,7 @@ def load_data():
     LEFT JOIN d_contrat c ON f.id_contrat = c.id_contrat
     LEFT JOIN d_date d ON f.id_date_publication = d.id_date
     """
-    return db.sql(query).df()
+    return db.execute(query).df()
 
 # --- TRAITEMENT DES COMPÉTENCES (Top 5) ---
 def get_top_skills(dataframe):
