@@ -4,7 +4,7 @@ from sympy import re
 import duckdb
 import pandas as pd
 import plotly.express as px
-from streamlit.config import MOTHERDUCK_DATABASE
+from config import MOTHERDUCK_DATABASE
 from dotenv import load_dotenv
 
 # --- CHARGEMENT DES VARIABLES D'ENVIRONNEMENT ---
