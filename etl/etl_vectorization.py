@@ -23,9 +23,11 @@ class EmbeddingETL:
         
     def connect(self):
         print(f"[{datetime.now().strftime('%H:%M:%S')}] Connecting to MotherDuck...")
+        
         connection_string = f"md:{self.motherduck_db}?motherduck_token={self.token}"
         self.con = duckdb.connect(connection_string)
-        print(f"[OK] Connected to {self.motherduck_db}")
+        
+        print(f"[OK] Connected to '{self.motherduck_db}'")
     
     def load_model(self):
         print(f"[{datetime.now().strftime('%H:%M:%S')}] Loading model...")
@@ -34,27 +36,36 @@ class EmbeddingETL:
     
     def prepare_embedding_column(self):
         print(f"[{datetime.now().strftime('%H:%M:%S')}] Preparing embedding column...")
-        check_query = """
-            SELECT column_name 
-            FROM information_schema.columns 
-            WHERE table_name = 'f_offre' AND column_name = 'embedding'
-        """
-        result = self.con.execute(check_query).fetchall()
         
-        if not result:
-            alter_query = f"ALTER TABLE f_offre ADD COLUMN embedding FLOAT[{self.embedding_dim}]"
-            self.con.execute(alter_query)
-            print(f"[OK] Column 'embedding' added")
-        else:
-            print(f"[INFO] Column 'embedding' exists")
+        # Pas de préfixe, juste la table
+        table_name = "f_offre"
+        
+        try:
+            check_query = f"DESCRIBE {table_name}"
+            result = self.con.execute(check_query).fetchdf()
+            
+            if 'embedding' not in result['column_name'].values:
+                print("[INFO] Column 'embedding' not found, creating...")
+                alter_query = f"ALTER TABLE {table_name} ADD COLUMN embedding FLOAT[{self.embedding_dim}]"
+                self.con.execute(alter_query)
+                print(f"[OK] Column 'embedding' added")
+            else:
+                print(f"[INFO] Column 'embedding' already exists")
+        
+        except Exception as e:
+            print(f"[WARNING] Cannot describe table: {e}")
+            print("[INFO] Attempting to add column directly...")
+            try:
+                alter_query = f"ALTER TABLE {table_name} ADD COLUMN embedding FLOAT[{self.embedding_dim}]"
+                self.con.execute(alter_query)
+                print(f"[OK] Column 'embedding' added")
+            except Exception as e2:
+                if "already exists" in str(e2).lower() or "duplicate" in str(e2).lower():
+                    print(f"[INFO] Column 'embedding' already exists")
+                else:
+                    raise e2
     
     def extract_enriched_data(self) -> pd.DataFrame:
-        """
-        Jointures pour enrichir le contexte NLP:
-        - d_localisation: contexte géographique (ville influence la recherche)
-        - d_contrat: type de poste (CDI/Stage/etc. sont sémantiquement différents)
-        Résultat: texte enrichi capturant TOUT le contexte de l'offre
-        """
         print(f"[{datetime.now().strftime('%H:%M:%S')}] Extracting data with enrichment...")
         
         query = """

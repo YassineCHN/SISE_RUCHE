@@ -6,8 +6,35 @@ import plotly.graph_objects as go
 import networkx as nx
 from streamlit.config import MOTHERDUCK_DATABASE
 from collections import Counter
+import os
+from dotenv import load_dotenv
 
-con = duckdb.connect("MOTHERDUCK_DATABASE")
+# ------------------------
+# CONNECTION DB
+# ------------------------
+dovenv_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), '.env')
+load_dotenv(dovenv_path)
+MOTHERDUCK_TOKEN = os.getenv("MOTHERDUCK_TOKEN")
+@st.cache_resource
+def get_motherduck_connection():
+    """Connexion au DataWhareHouse"""
+    try:
+        if not MOTHERDUCK_TOKEN:
+            st.error(" Missing MotherDuck Token")
+            st.stop()
+        
+        con = duckdb.connect(f"md:?motherduck_token={MOTHERDUCK_TOKEN}")
+        con.execute(f"CREATE DATABASE IF NOT EXISTS {MOTHERDUCK_DATABASE}")
+        con.close()
+        con = duckdb.connect(f"md:{MOTHERDUCK_DATABASE}?motherduck_token={MOTHERDUCK_TOKEN}")
+        
+        return con
+        
+    except Exception as e:
+        st.error(f"Erreur de connexion : {e}")
+        st.stop()
+
+con = get_motherduck_connection()
 
 # ------------------------
 # titre
