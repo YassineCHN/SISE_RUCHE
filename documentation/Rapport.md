@@ -75,8 +75,69 @@ Le filtrage post-extraction a permis d'affiner les résultats avec une précisio
 Le système développé démontre que l'utilisation de la programmation concurrente, couplée à un contrôle rigoureux du débit, permet de construire des pipelines d'acquisition de données robustes et scalables. Cette architecture est directement transposable à d'autres plateformes de données ouvertes (Open Data), constituant une base solide pour des analyses ultérieures du marché de l'emploi.
 
  ####- APEC####
+ 
  ####- Jobteaser####
+ 
  ####- Choisir le service public####
+ Afin de ne pas restreindre l'analyse du marché de l'emploi sur les questtions data et IA aux seuls employeurs de droit privé, une collecte des offres d'emploi proposées par le secteur public s'est imposé.
+ Une première recherche a été initialement effectuée sur un ensemble de sites d'emploi public : emploipublic.fr, emploi-territorial.fr et emploi.fhf.fr. Afin de faciliter la prise en compte des différents formats de chaque portail par un seul et même programme de scraping, le recours à une méthode d'extraction sémantique assistée par modèles de langage (LLM) s'est imposé afin de bénéficier d'une souplesse d'adaptation du modèle à la structure.
+ Cependant le portail choisirleservicepublic.gouv.fr s'est révélé par la suite une source plus fiable d'offres et il a donc été choisi comme source unique de scraping dédiée au secteur public. Le modèle ayant déjà été développé à ce stade, le recours au LLM a été maintenu, dans un souci d'optimisation.
+ Le système mis en oeuvre à partir du portail choisirleservicepublic.gouv.fr constitue un pipeline automatisé de collecte, de structuration et de stockage d’offres d’emploi du Service Public français.  Il combine des techniques de web scraping à grande échelle, de traitement parallèle, et de LLM afin de produire des données normalisées, exploitables dans un contexte analytique ou de recherche en intelligence artificielle.
+ +-----------------------------+
+| Site Service Public         |
+| choisirleservicepublic.fr   |
++-------------+---------------+
+              |
+              | (HTTP Scraping)
+              v
++-----------------------------+
+| Collecte des URLs           |
+| Pagination & Filtrage       |
++-------------+---------------+
+              |
+              | (Parallel Processing)
+              v
++-----------------------------+
+| Extraction HTML             |
+| Nettoyage & Filtrage        |
++-------------+---------------+
+              |
+              | (Rate Limited API Calls)
+              v
++-----------------------------+
+| LLM Mistral                 |
+| Extraction JSON Structurée  |
++-------------+---------------+
+              |
+              | (Validation & Normalisation)
+              v
++-----------------------------+
+| Schéma Harmonisé            |
+| Enrichissement sémantique   |
++-------------+---------------+
+              |
+              | (Déduplication & Bulk Upsert)
+              v
++-----------------------------+
+| MongoDB Atlas               |
+| Datalake Offres d’emploi    |
++-----------------------------+
+
+ Le pipeline méthodologique développé vise l’extraction, la structuration et la persistance automatisées d’offres d’emploi à grande échelle. La phase de collecte repose sur un module de crawling multi-pages paramétrable par mots-clés, intégrant une gestion dynamique de la pagination, un contrôle du volume de requêtes et des mécanismes de tolérance aux défaillances réseau.
+
+Le traitement est parallélisé via un pool de threads afin d’améliorer le débit global. Un mécanisme de rate limiting thread-safe est implémenté pour réguler les appels aux modèles de langage, garantissant le respect des quotas imposés par les APIs externes et la stabilité du système sous forte charge.
+
+Les documents HTML collectés font l’objet d’un prétraitement systématique incluant le nettoyage structurel, la suppression des éléments non informatifs et le contrôle de la taille des contenus. Cette étape vise à maximiser le signal sémantique utile tout en minimisant le bruit transmis aux modèles de traitement du langage.
+
+L’extraction d’information s’appuie sur un modèle de langage (Mistral) utilisé comme composant de structuration sémantique. Un prompt fortement contraint, fondé sur une approche few-shot learning et une configuration déterministe (température nulle), permet la génération de sorties JSON conformes à un schéma prédéfini. Des mécanismes de validation syntaxique et de récupération robuste sont mis en œuvre afin de gérer les sorties partielles ou incorrectes du modèle.
+
+Les données structurées sont ensuite normalisées selon un schéma unifié et enrichies par des traitements sémantiques légers, incluant la détection de thématiques métier et la standardisation des formats temporels. Une stratégie de déduplication par hachage sur les champs clés est appliquée en amont du stockage persistant.
+
+La persistance s’appuie sur une base MongoDB Atlas, exploitant des index uniques et des opérations d’upsert par lot, permettant une intégration efficace dans un environnement de type datalake orienté analyse. Enfin, un dispositif d’observabilité complet est déployé, produisant des métriques quantitatives sur le débit, les taux d’erreur, les performances temporelles et la robustesse globale du pipeline.
+
+**Limites et Perspectives** : Malgré son niveau d’automatisation et sa robustesse globale, le système présente plusieurs limites méthodologiques et techniques. Il repose notamment sur la dépendance à un modèle de langage externe, dont la disponibilité, la latence, les coûts et les contraintes de quota peuvent impacter la continuité et la qualité de l’extraction. Par ailleurs, la génération de données structurées par un LLM, bien que fortement contrainte, demeure partiellement non déterministe, nécessitant des mécanismes de validation et de correction pour garantir la fiabilité des résultats. La qualité de l’extraction dépend également de la stabilité de la structure HTML des sources, rendant le système sensible aux évolutions du site cible. Enfin, l’architecture actuelle, fondée sur un traitement par lots hors ligne, limite son usage pour des scénarios nécessitant une actualisation en temps réel.
+
+Plusieurs perspectives d’amélioration sont envisagées afin de renforcer la robustesse et l’évolutivité du pipeline. L’intégration de schémas de validation formelle permettrait de sécuriser la qualité des données produites. Des mécanismes de vérification croisée ou de re-ranking pourraient accroître la fiabilité des informations critiques. L’ajout d’une couche de recherche sémantique, basée sur des embeddings, ouvrirait la voie à des usages avancés tels que le matching ou l’analyse du marché de l’emploi public. Enfin, une évolution vers une architecture orientée événements favoriserait des mises à jour incrémentales plus fréquentes et une meilleure scalabilité du système.
 
  ##Section 2 : Entrepôt de données, sous MotherDuck ##
   - uniformisation des variables de chaque collection du datalake
