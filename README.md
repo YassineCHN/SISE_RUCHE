@@ -42,19 +42,19 @@ Le projet RUCHE s’inscrit dans le cadre du module **NLP & Text Mining** du Mas
   - Extraction automatisée d’annonces issues de plateformes d’emploi accessibles en ligne  
     (France Travail, APEC, JobTeaser, Choisir le Service Public, etc.)
   - Collecte réalisée via des techniques de **web scraping** (BeautifulSoup, Selenium) et des **API** lorsque disponibles
-
-- 🧾 **Analyser les annonces dans leurs différentes dimensionnalités**
   - Exploitation des champs structurés lorsqu’ils sont disponibles  
     *(titre, missions, compétences, profil, rémunération, localisation, type de contrat…)*
   - Analyse du **corps textuel complet** lorsque la structure est absente ou hétérogène
   - Focalisation sur les **métiers et compétences liés à la Data Science et à l’Intelligence Artificielle**
   - Stocker sur MongoDB (Base NoSql) dans différentes collections les offres scrapper
+  - 6000 offres collectés 
 
 - 🗄️ **Mettre en place un entrepôt de données**
   - Créaction d'une pipeline d'ETL pour **extraire** nos offre de MongoDb, les **transformer** et les **charger** dans une BDD relationnel sur MotherDuckdb
   - Modélisation sous forme de **schéma en étoile** (table de faits et dimensions)
   - Stockage dans un **SGBD libre** (DuckDB via MotherDuck)
   - Connexion directe entre l’application et la base de données analytique
+  - ~4000 offres après nettoyages stocker sur MotherDuck et DuckDB
     
 - 🧠 **Appliquer des méthodes avancées de NLP et de Machine Learning**
   - Filtrage automatique des offres non pertinentes (hors data / IA)
