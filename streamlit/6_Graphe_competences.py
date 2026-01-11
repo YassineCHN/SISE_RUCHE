@@ -4,7 +4,7 @@ import itertools
 import pandas as pd
 import plotly.graph_objects as go
 import networkx as nx
-from streamlit.config import MOTHERDUCK_DATABASE
+from config import MOTHERDUCK_DATABASE
 from collections import Counter
 import os
 from dotenv import load_dotenv
