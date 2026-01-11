@@ -38,9 +38,9 @@ Le choix de l'hébergement de cette  base de données initiale s'est porté sur 
 En effet , la plateforme MongoDB est particulièrement adaptée au stockage de documents en format .json, attendu que le stockage est réalisé en BJSON (Binary JSON). Ce choix technologique permet de stocker directement les productions des procédures de scraping sans aucune transformation nécessaire préalable. Par ailleurs, le JSON permettant d’obtenir des listes ou bien des objets dans des objets, MongoDB gère nativement ces hiérarchies. Cette fonctionnalité permet de conserver la structure des éléments scrapés sans risque de perte d’information.
 
 
-###Sous section 2 : 4 procédures de Scraping
+###Sous section 2 : 4 procédures de Scraping###
  
- ####- France Travail
+ ####- France Travail####
          Le site francetravail.fr propose une API officielle d'extraction des annonces de sa base de données.L'extraction de données à grande échelle à partir d'API publiques présente des défis structurels : latence réseau, limitations de débit (rate limiting) et hétérogénéité des données. Ce projet expose la conception d'un système de scraping "production-grade" capable d'automatiser la collecte d'offres d'emploi liées à l'Intelligence Artificielle, en optimisant le compromis entre performance et conformité aux politiques d'utilisation de l'API.
          
  Le système est conçu selon une architecture de pipeline à trois niveaux, garantissant une séparation stricte entre l'authentification, la découverte et l'extraction.
@@ -74,9 +74,9 @@ Le filtrage post-extraction a permis d'affiner les résultats avec une précisio
 **Conclusion**
 Le système développé démontre que l'utilisation de la programmation concurrente, couplée à un contrôle rigoureux du débit, permet de construire des pipelines d'acquisition de données robustes et scalables. Cette architecture est directement transposable à d'autres plateformes de données ouvertes (Open Data), constituant une base solide pour des analyses ultérieures du marché de l'emploi.
 
- ####- APEC
- ####- Jobteaser
- ####- Choisir le service public
+ ####- APEC####
+ ####- Jobteaser####
+ ####- Choisir le service public####
 
  ##Section 2 : Entrepôt de données, sous MotherDuck ##
   - uniformisation des variables de chaque collection du datalake
