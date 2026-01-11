@@ -1,4 +1,7 @@
-# RUCHE Projet NLP 
+# 🐝 RUCHE
+Projet NLP & Text Mining – Master 2 SISE (2025–2026) 
+
+### Application de cherche d'emplois
 
 ![Logo](streamlit/static/Logo3.png)
 
