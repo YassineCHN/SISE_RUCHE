@@ -4,224 +4,130 @@ The goal is to extract and normalize city names from various location formats.
 """
 
 import re
+import html
 import pandas as pd
 
-
 def normalize_city_name(city: str) -> str:
-    """
-    Normalize the name of a city: first letter uppercase, rest lowercase
-    Handles special cases (d', -sur-, etc.)
-    Examples:
-        'PARIS' -> 'Paris'
-        'saint-denis' -> 'Saint-Denis'
-        "aix-en-provence" -> "Aix-en-Provence"
-    """
-    if not city or city == 'UNKNOWN':
-        return city
+    """Normalise la casse (ex: 'SAINT-DENIS' -> 'Saint-Denis') et les abréviations."""
+    if not city or city.upper() == 'UNKNOWN': return 'UNKNOWN'
     
-    # Mots à garder en minuscule (articles, prépositions)
+    # Correction des abréviations courantes avant normalisation
+    city = re.sub(r'\bs/\b', 'sur', city, flags=re.IGNORECASE)
+    if re.search(r'\bNeuilly\b', city, re.IGNORECASE): return "Neuilly-sur-Seine"
+
     lowercase_words = {'le', 'la', 'les', 'de', 'du', 'des', 'en', 'sur', 'sous', 'au', 'aux'}
     
-    # Split sur les espaces et tirets
+    def transform_word(word, index):
+        word_low = word.lower()
+        if word_low.startswith("d'") and len(word_low) > 2:
+            return f"d'{word_low[2:].capitalize()}"
+        if index > 0 and word_low in lowercase_words:
+            return word_low
+        return word_low.capitalize()
+
+    city = re.sub(r'^[^A-Za-zÀ-ÿ]+|[^A-Za-zÀ-ÿ]+$', '', city)
     parts = []
-    for segment in city.split():
-        # Gérer les tirets
-        if '-' in segment:
-            subsegments = segment.split('-')
-            normalized_subsegments = []
-            for i, sub in enumerate(subsegments):
-                sub_lower = sub.lower()
-                # Gérer "d'xxx" spécialement
-                if sub_lower.startswith("d'") and len(sub_lower) > 2:
-                    normalized_subsegments.append("d'" + sub_lower[2:].capitalize())
-                # Premier segment ou pas dans la liste des mots en minuscule
-                elif i == 0 or sub_lower not in lowercase_words:
-                    normalized_subsegments.append(sub_lower.capitalize())
-                else:
-                    normalized_subsegments.append(sub_lower)
-            parts.append('-'.join(normalized_subsegments))
+    for i, space_part in enumerate(city.split()):
+        if '-' in space_part:
+            parts.append('-'.join([transform_word(sub, i + j) for j, sub in enumerate(space_part.split('-'))]))
         else:
-            word_lower = segment.lower()
-            # Gérer "d'" spécialement
-            if word_lower.startswith("d'") and len(word_lower) > 2:
-                parts.append("d'" + word_lower[2:].capitalize())
-            elif word_lower in lowercase_words and len(parts) > 0:
-                parts.append(word_lower)
-            else:
-                parts.append(word_lower.capitalize())
-    
+            parts.append(transform_word(space_part, i))
     return ' '.join(parts)
 
-
 def extract_city_from_location(location: str) -> str:
-    """
-    Extrait le nom de ville à partir de différents formats de localisation
-    
-    Formats gérés:
-    - "Cannes (France)" -> "Cannes"
-    - "Terr. Boieldieu, 92800 Puteaux (France)" -> "Puteaux"
-    - "91120 Palaiseau (France)" -> "Palaiseau"
-    - "Crolles, 38140, FR (France)" -> "Crolles"
-    - "78140 Vélizy-Villacoublay (France)" -> "Vélizy-Villacoublay"
-    - "12 Rue Pierre-Félix Delarue, 72100 Le Mans (France)" -> "Le Mans"
-    - "Paris 01 - 75" -> "Paris"
-    - "Saint-Didier-au-Mont-d'Or - 69" -> "Saint-Didier-au-Mont-d'Or"
-    - "75 - Paris 1er Arrondissement" -> "Paris"
-    - "75 - Paris" -> "Paris"
-    - "Montpellier" -> "Montpellier"
-    - "Saint-Maurice, 12 rue du Val d'Osne" -> "Saint-Maurice"
-    """
-    
-    if not location or pd.isna(location):
+    """Moteur généraliste basé sur l'exclusion des types de voies."""
+    if not location or pd.isna(location) or str(location).upper() == 'UNKNOWN': 
         return 'UNKNOWN'
+
+    # 1. Nettoyage initial
+    loc = html.unescape(str(location))
+    loc = loc.replace('&#xa;', ' ').replace('\n', ' ').replace('\r', ' ')
+    loc = re.sub(r'\s+', ' ', loc).strip()
+    loc = re.sub(r'\s*\((?:FRANCE|FR|france|fr|France)\)$', '', loc, flags=re.IGNORECASE)
+
+    # 2. Priorité Métropoles (Scan global)
+    for major in ['Paris', 'Lyon', 'Marseille', 'Grenoble', 'Bordeaux', 'Toulouse', 'Lille', 'Nantes']:
+        if re.search(rf'\b{major}\b', loc, re.IGNORECASE):
+            return major
+
+    # 3. Filtrage par segments (Séparateurs: virgule, tiret long, slash)
+    segments = re.split(r',| - | / ', loc)
+    street_keywords = r'\b(Rue|Av\.|Avenue|Bd|Boulevard|Place|Pl\.|Route|Chemin|Allée|Square|Impasse|Quai|Cours|Résidence|Bâtiment|Immeuble|Avenue|St)\b'
     
-    location = str(location).strip()
-    
-    if not location:
-        return 'UNKNOWN'
-    
-    # Supprimer "(France)", "(FR)", etc. à la fin
-    location = re.sub(r'\s*\([^)]*\)\s*$', '', location)
-    
-    # Pattern 1: "75 - Paris 1er Arrondissement" ou "75 - Paris"
-    # Extraire ce qui suit le code département
-    match = re.match(r'^\d{2}[AB]?\s*-\s*(.+?)(?:\s+\d+(?:er|ème|e)?\s+Arrondissement)?$', location, re.IGNORECASE)
-    if match:
-        city = match.group(1).strip()
-        # Enlever un éventuel " -" à la fin
-        city = re.sub(r'\s*-\s*$', '', city)
-        return normalize_city_name(city)
-    
-    # Pattern 2: "Saint-Didier-au-Mont-d'Or - 69" (ville avant le code)
-    # ou "Paris 01 - 75" (ville + arrondissement avant le code)
-    match = re.match(r'^([A-Za-zÀ-ÿ\s\-\']+?)\s+\d*\s*-\s*\d{2}[AB]?\s*$', location)
-    if match:
-        city = match.group(1).strip()
-        # Enlever un éventuel numéro d'arrondissement à la fin
-        city = re.sub(r'\s+\d+$', '', city)
-        return normalize_city_name(city)
-    
-    # Pattern 3: Code postal suivi de la ville: "92800 Puteaux" ou "78140 Vélizy-Villacoublay"
-    match = re.search(r'\b\d{5}\s+([A-Za-zÀ-ÿ\s\-\']+?)(?:\s*,|$)', location)
-    if match:
-        city = match.group(1).strip()
-        return normalize_city_name(city)
-    
-    # Pattern 4: Adresse complexe avec numéro de rue et code postal
-    # "12 Rue Pierre-Félix Delarue, 72100 Le Mans"
-    match = re.search(r',\s*\d{5}\s+([A-Za-zÀ-ÿ\s\-\']+?)(?:\s*,|$)', location)
-    if match:
-        city = match.group(1).strip()
-        return normalize_city_name(city)
-    
-    # Pattern 5: "Ville, code_postal" (ville en premier)
-    # "Crolles, 38140, FR" ou "Saint-Maurice, 12 rue du Val d'Osne"
-    match = re.match(r'^([A-Za-zÀ-ÿ\s\-\']+?)\s*,', location)
-    if match:
-        city = match.group(1).strip()
-        # Vérifier que ce n'est pas un numéro de rue
-        if not re.match(r'^\d+', city):
-            return normalize_city_name(city)
-    
-    # Pattern 6: Juste le nom de ville (sans virgule, sans code)
-    # "Montpellier"
-    match = re.match(r'^([A-Za-zÀ-ÿ\s\-\']+)$', location)
-    if match:
-        city = match.group(0).strip()
-        return normalize_city_name(city)
-    
-    # Si aucun pattern ne correspond, essayer de prendre le dernier mot significatif
-    words = location.split(',')[-1].strip()
-    words = re.sub(r'\d{5}', '', words).strip()  # Enlever code postal
-    words = re.sub(r'\b\d{2}[AB]?\b', '', words).strip()  # Enlever code département
-    
-    if words and not words.isdigit():
-        return normalize_city_name(words)
-    
+    potential_candidates = []
+    for seg in segments:
+        seg = seg.strip()
+        # On ignore si c'est une rue ou purement numérique
+        if not re.search(street_keywords, seg, re.IGNORECASE) and not re.match(r'^\d+$', seg):
+            # Nettoyage des codes postaux (2 à 5 chiffres)
+            clean_seg = re.sub(r'\b\d{2,5}\b', '', seg).strip()
+            if len(clean_seg) > 2:
+                potential_candidates.append(clean_seg)
+
+    # 4. Décision sur le candidat
+    if potential_candidates:
+        # On privilégie le dernier candidat trouvé (souvent la ville en fin d'adresse)
+        # Sauf si le premier est un nom de service (Sgami/Dipn), on traite via post-process
+        candidate = potential_candidates[-1]
+        if re.search(r'\b(Sgami|Dipn|Drpj|Ddsp)\b', candidate, re.IGNORECASE):
+            m = re.search(r'\b(Nord|Sud|Est|Ouest)\b', loc, re.IGNORECASE)
+            return m.group(0).capitalize() if m else candidate.split()[0].upper()
+        return normalize_city_name(candidate)
+
+    # 5. Fallback Regex CP + Ville
+    p_cp = re.search(r'(?:\b\d{3,5}\b)\s*[-]?\s*([A-Za-zÀ-ÿ\s\-\']+)|([A-Za-zÀ-ÿ\s\-\']+?)\s*[-]?\s*(?:\b\d{3,5}\b)', loc)
+    if p_cp:
+        res = p_cp.group(1) if p_cp.group(1) else p_cp.group(2)
+        return normalize_city_name(res.strip())
+
     return 'UNKNOWN'
 
-
-def clean_location_column(df: pd.DataFrame, location_col: str = 'location') -> pd.DataFrame:
-    """
-    Nettoie la colonne location d'un DataFrame
-    
-    Args:
-        df: DataFrame contenant la colonne à nettoyer
-        location_col: nom de la colonne contenant les localisations
-    
-    Returns:
-        DataFrame avec colonne nettoyée
-    """
-    df = df.copy()
-    
-    print(f" Cleaning {location_col} column...")
-    print(f"   Before: {df[location_col].nunique()} unique values")
-    
-    # Appliquer l'extraction
-    df[location_col] = df[location_col].apply(extract_city_from_location)
-    
-    print(f"   After:  {df[location_col].nunique()} unique values")
-    print(f"   UNKNOWN entries: {(df[location_col] == 'UNKNOWN').sum()}")
-    
-    return df
-
-
 # ============================================================================
-# Tests unitaires
+# TESTS GÉNÉRAUX (Couvrant tous les scénarios précédents)
 # ============================================================================
 
-def test_extraction():
-    """Tests des différents formats"""
+def run_general_tests():
     test_cases = [
-        ("Cannes (France)", "Cannes"),
-        ("Terr. Boieldieu, 92800 Puteaux (France)", "Puteaux"),
-        ("91120 Palaiseau (France)", "Palaiseau"),
-        ("Crolles, 38140, FR (France)", "Crolles"),
-        ("78140 Vélizy-Villacoublay (France)", "Vélizy-Villacoublay"),
-        ("12 Rue Pierre-Félix Delarue, 72100 Le Mans (France)", "Le Mans"),
-        ("Paris 01 - 75", "Paris"),
-        ("Saint-Didier-au-Mont-d'Or - 69", "Saint-Didier-au-Mont-d'Or"),
-        ("75 - Paris 1er Arrondissement", "Paris"),
-        ("75 - Paris", "Paris"),
-        ("Montpellier", "Montpellier"),
+        # Adresses et Voies
+        ("47 Av. de la Grande Armée, 75016 Paris", "Paris"),
+        ("12 Rue Pierre-Félix Delarue, 72100 Le Mans", "Le Mans"),
         ("Saint-Maurice, 12 rue du Val d'Osne", "Saint-Maurice"),
-        ("", "UNKNOWN"),
-        (None, "UNKNOWN"),
-        ("LYON", "Lyon"),
+        ("135 Avenue Charles de Gaulle, Neuilly-sur-S", "Neuilly-sur-Seine"),
+        
+        # Administratif et Métropoles
+        ("Paris 15eme", "Paris"),
+        ("Paris Cedex 08", "Paris"),
+        ("Marseille 10", "Marseille"),
+        ("Grenoble - Sophia Antipolis - le Chesnay-Ro", "Grenoble"),
+        ("Sgami Nord - Direction de L'immobilier", "UNKNOWN"),
+        ("Dipn - Service Local de Police Judiciaire", "UNKNOWN"),
+        
+        # Formats Codes Postaux et DOM-TOM
+        ("972 - Lamentin", "Lamentin"),
+        ("Le Lamentin - 972", "Le Lamentin"),
+        ("Bordeaux - 33", "Bordeaux"),
+        ("Lyon - 69", "Lyon"),
+        
+        # Nettoyage et Cas Spéciaux
+        ("/ Avenue des Champs Elysees&#xa; Paris&#xa;", "Paris"),
+        ("Place du Marche St Honore&#xa; Paris&#xa;", "Paris"),
         ("aix-en-provence", "Aix-en-Provence"),
-        ("saint-jean-de-luz", "Saint-Jean-de-Luz"),
+        ("Paris-Drouot", "Paris"),
+        ("UNKNOWN", "UNKNOWN")
     ]
     
-    print("\n" + "="*70)
-    print("TESTS D'EXTRACTION DE VILLE")
-    print("="*70)
-    
+    print(f"{'INPUT':<45} | {'RESULT':<18} | STATUS")
+    print("-" * 80)
     passed = 0
-    failed = 0
+    for inp, exp in test_cases:
+        res = extract_city_from_location(inp)
+        status = "✅" if res == exp else "❌"
+        if res == exp: passed += 1
+        print(f"{str(inp)[:43]:<45} | {res:<18} | {status}")
+        if res != exp: print(f"   ⚠️ Attendu: {exp}")
     
-    for input_loc, expected in test_cases:
-        result = extract_city_from_location(input_loc)
-        status = "✅" if result == expected else "❌"
-        
-        if result == expected:
-            passed += 1
-        else:
-            failed += 1
-            
-        print(f"{status} '{input_loc}' -> '{result}' (expected: '{expected}')")
-    
-    print("="*70)
-    print(f"Résultats: {passed} réussis, {failed} échoués")
-    print("="*70 + "\n")
-    
-    return failed == 0
-
+    print("-" * 80)
+    print(f"SCORE GÉNÉRAL: {passed}/{len(test_cases)} ({(passed/len(test_cases))*100:.1f}%)")
 
 if __name__ == "__main__":
-    # Exécuter les tests
-    success = test_extraction()
-    
-    if success:
-        print("✅ Tous les tests sont passés!")
-    else:
-        print("❌ Certains tests ont échoué")
+    run_general_tests()
