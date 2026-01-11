@@ -9,7 +9,7 @@ MOTHERDUCK_TOKEN = os.getenv("MOTHERDUCK_TOKEN")
 
 # 1. Configuration
 local_db_path = "data/local.duckdb"
-target_db_name = "job_market_RUCHE_cleaned"  # Nom de la base sur MotherDuck
+target_db_name = "job_market_RUCHE"  # Nom de la base sur MotherDuck
 
 try:
     # 2. Connexion à MotherDuck
