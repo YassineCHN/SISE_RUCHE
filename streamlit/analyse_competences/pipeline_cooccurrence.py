@@ -3,12 +3,14 @@ import itertools
 import pandas as pd
 from collections import Counter
 
-con = duckdb.connect("md:job_market_RUCHE_final")
+con = duckdb.connect("md:job_market_RUCHE")
 
-df = con.execute("""
+df = con.execute(
+    """
     SELECT job_id, hard_skills
     FROM f_offre
-""").df()
+"""
+).df()
 
 pairs = Counter()
 for skills in df["hard_skills"]:
@@ -18,7 +20,7 @@ for skills in df["hard_skills"]:
 
 graph_df = pd.DataFrame(
     [(a, b, w) for (a, b), w in pairs.items() if w >= 5],
-    columns=["skill_1", "skill_2", "weight"]
+    columns=["skill_1", "skill_2", "weight"],
 )
 
 con.execute("DROP TABLE IF EXISTS skill_cooccurrence")
