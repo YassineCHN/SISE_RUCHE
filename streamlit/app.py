@@ -13,8 +13,7 @@ visualisation = st.Page("3_visualisation.py", title="Visualisation", icon="📊"
 ajout = st.Page("4_add_offers.py", title="Ajout Offres", icon="🆕")
 clustering = st.Page("5_Clustering.py", title="Clustering Offres", icon="🎯")
 graphe_comp = st.Page("6_Graphe_competences.py", title="Graphe compétences", icon="🧰")
-llm = st.Page("7_LLM.py", title="Chatbot", icon="🤖")
-about = st.Page("8_about.py", title="A propos", icon="ℹ️")
+about = st.Page("7_about.py", title="A propos", icon="ℹ️")
 # Set up navigation
 pg = st.navigation(
     [
@@ -24,7 +23,6 @@ pg = st.navigation(
         ajout,
         clustering,
         graphe_comp,
-        llm,
         about,
     ],
     position="top",

@@ -55,6 +55,7 @@ et_xmlfile>=2.0.0
 # App
 # ======================
 streamlit>=1.30.0
+streamlit-folium>=0.22.0
 mistralai>=1.0.0
 
 # ======================

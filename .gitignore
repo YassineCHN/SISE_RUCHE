@@ -39,3 +39,5 @@ config/
 etl/job_offers_cleaned.xlsx
 etl/job_offers_raw.xlsx
 loader_config.py
+test_connexion_duckdb.py
+test_creation_duckdb.py
