@@ -17,7 +17,94 @@ Elle combine **web scraping**, **NLP**, **machine learning**, **data warehousing
 
 Le système repose sur une **architecture end-to-end**, depuis la collecte des données jusqu’à leur exploitation analytique au sein d’une application **Streamlit**.
 
-## Architecture
+---
+
+## 🧠 Objectifs du projet
+
+Le projet RUCHE s’inscrit dans le cadre du module **NLP & Text Mining** du Master 2 SISE et répond aux objectifs pédagogiques suivants :
+
+- 📥 **Constituer un corpus d’offres d’emploi**
+  - Extraction automatisée d’annonces issues de plateformes d’emploi accessibles en ligne  
+    (France Travail, APEC, JobTeaser, Choisir le Service Public, etc.)
+  - Collecte réalisée via des techniques de **web scraping** (BeautifulSoup, Selenium) et des **API** lorsque disponibles
+
+- 🧾 **Analyser les annonces dans leurs différentes dimensionnalités**
+  - Exploitation des champs structurés lorsqu’ils sont disponibles  
+    *(titre, missions, compétences, profil, rémunération, localisation, type de contrat…)*
+  - Analyse du **corps textuel complet** lorsque la structure est absente ou hétérogène
+  - Focalisation sur les **métiers et compétences liés à la Data Science et à l’Intelligence Artificielle**
+  - Stocker sur MongoDB (Base NoSql) dans différentes collections les offres scrapper
+
+- 🗄️ **Mettre en place un entrepôt de données**
+  - Créaction d'une pipeline d'ETL pour **extraire** nos offre de MongoDb, les **transformer** et les **charger** dans une BDD relationnel sur MotherDuckdb
+  - Modélisation sous forme de **schéma en étoile** (table de faits et dimensions)
+  - Stockage dans un **SGBD libre** (DuckDB via MotherDuck)
+  - Connexion directe entre l’application et la base de données analytique
+    
+- 🧠 **Appliquer des méthodes avancées de NLP et de Machine Learning**
+  - Filtrage automatique des offres non pertinentes (hors data / IA)
+  - Vectorisation sémantique des annonces
+  - Recherche par similarité en langage naturel
+  - Analyses interprétables et lisibles, y compris lors de l’usage de modèles de langage (LLM)
+
+- 🌐 **Développer une application web interactive**
+  - Application Python basée sur **Streamlit**
+  - Interface dédiée à l’exploration, la recherche et l’analyse du corpus
+  - Visualisations interactives (cartes, graphiques dynamiques, clustering)
+
+- 🗺️ **Intégrer une dimension géographique**
+  - Analyse territoriale à l’échelle des villes, départements et régions
+  - Représentations cartographiques interactives
+
+- ➕ **Permettre l’ajout dynamique de nouvelles offres**
+  - Ajout manuel ou semi-automatisé d’annonces (LLM - Mistral)
+  - Mécanismes de **détection de doublons** pour préserver la qualité du corpus
+
+- 🚢 **Garantir la reproductibilité et le déploiement**
+  - Déploiement de l’ensemble du système via une **image Docker**
+  - L’utilisateur peut lancer l’application sans configuration complexe
+
+---
+
+## 🏗️ Architecture globale
+
+```
+┌───────────────┐    ┌────────────────────┐    ┌──────────────────────┐    ┌──────────────────────────┐    ┌──────────────────────┐
+│  Web Scraping │ →  │      MongoDB       │ →  │  ETL & Normalisation │ →  │        MotherDuck        │ →  │        Streamlit      │
+│ APIs/Crawlers │    │ Data Lake (JSON)   │    │ Nettoyage & Enrich.  │    │ Data Warehouse étoile   │    │ Recherche & Analyses  │
+└───────────────┘    └────────────────────┘    └──────────────────────┘    └──────────────────────────┘    └──────────────────────┘
+```
+
+---
+
+## 🌐 Sources de données
+
+Quatre plateformes majeures ont été exploitées :
+
+- **France Travail**  
+  API officielle, OAuth2, scraping parallèle
+- **APEC**  
+  Selenium + BeautifulSoup, extraction structurée offline
+- **JobTeaser**  
+  Anti-bot, scraping React, filtrage précoce
+- **Choisir le Service Public**  
+  Scraping + extraction structurée assistée par LLM (Mistral)
+
+👉 Les données brutes sont stockées en **MongoDB Atlas** (NoSQL) au format **JSON**.
+
+---
+
+## 🗄️ Data Warehouse – MotherDuck
+
+Le data warehouse repose sur **MotherDuck (DuckDB cloud)** avec :
+
+- **Schéma en étoile**
+- **Table de faits** : `f_offre`
+- **Dimensions** : `d_date`, `d_contrat`, `d_localisation`, `h_region`
+
+--- 
+
+## Architecture du Projet 
 
 ```
 RUCHE/
@@ -75,96 +162,35 @@ RUCHE/
 └── README.md
 
 ```
+--- 
 
-## Setup
+## 🚀 Lancer l’application
 
-1. **Install dependencies:**
+1. **Installer les dépendances:**
 ```bash
 pip install -r requirements_mongodo_ftscraper.txt
 ```
 
-2. **Configure `.env` file:**
+2. **Configurer `.env` file:**
 ```env
-MONGO_URI=mongodb+srv://username:password@cluster.mongodb.net/
-FT_CLIENT_ID=your_ft_client_id
-FT_CLIENT_SECRET=your_ft_client_secret
+MOTHERDUCK_TOKEN=MOTHERDUCKDB_KEY
+MOTHERDUCK_DATABASE = "job_market_RUCHE"
 ```
 
-3. **Test MongoDB connection:**
+3. **Lancer Streamlit**
 ```bash
-python mongodb.mongodb_utils.py
+streamlit run app.py
 ```
 
-## Usage
+--- 
+## 👥 Équipe
 
-### France Travail Scraper
-```bash
-python scraper_francetravail.py
-```
+- Romain Buono
+-  Yassine Cheniour
+- Miléna Gordien-Piquet
+- Anne-Camille Vial
 
-### Create Your Own Scraper
-```python
-from mongodb.mongodb_utils import get_collection, create_unique_index, bulk_upsert
+#### 🎓 Master 2 SISE – Université Lyon 2####
+#### 👨‍🏫 Encadrant : M. Ricco Rakotomalala####
 
-# 1. Define your collection name
-COLLECTION_NAME = "apec_raw"
-
-# 2. Get collection
-collection = get_collection(COLLECTION_NAME)
-create_unique_index(collection, "id")
-
-# 3. Scrape your data
-offers = scrape_apec_data()  # Your scraping logic
-
-# 4. Convert to list of dicts
-documents = [offer.to_dict() for offer in offers]
-
-# 5. Upsert to MongoDB
-bulk_upsert(collection, documents)
-```
-
-## MongoDB Utilities Reference
-
-### Connection Functions
-- `get_mongo_client()` - Get MongoDB client
-- `get_collection(name)` - Get specific collection
-- `create_unique_index(collection, field)` - Create unique index
-
-### Data Operations
-- `bulk_upsert(collection, docs)` - Upsert documents (update or insert)
-- `bulk_insert(collection, docs)` - Insert new documents only
-- `count_documents(collection, filter)` - Count documents
-- `get_latest_scraped(collection, limit)` - Get recent documents
-
-### Collection Management
-- `list_collections()` - List all collections
-- `get_collection_stats(collection)` - Get collection statistics
-- `drop_collection(name, confirm=True)` - Delete collection
-
-## Best Practices
-
-1. **Always use upsert** - Prevents duplicates
-2. **Create unique index on 'id'** - Required for efficient upserts
-3. **Use same DB_NAME** - All scrapers share `RUCHE_datalake`
-4. **Different collections** - Each source gets its own collection
-5. **Add scraped_at timestamp** - Track when data was collected
-
-## Example: APEC Scraper Template
-```python
-from mongodb.mongodb_utils import get_collection, bulk_upsert
-from dataclasses import dataclass, asdict
-
-COLLECTION_NAME = "apec_raw"
-
-@dataclass
-class APECOffer:
-    id: str
-    title: str
-    company: str
-    # ... your fields
-
-collection = get_collection(COLLECTION_NAME)
-offers = scrape_apec()
-docs = [offer.to_dict() for offer in offers]
-bulk_upsert(collection, docs)
-```
+---
