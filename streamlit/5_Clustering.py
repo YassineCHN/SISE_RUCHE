@@ -37,6 +37,8 @@ def get_motherduck_connection():
         st.stop()
 
 con = get_motherduck_connection()
+
+st.set_page_config(layout="wide", page_title="Clusters d'offres", page_icon="👨‍👧‍👧")
 # ------------------------
 # CACHE MODELE
 # ------------------------
@@ -226,3 +228,6 @@ fig = px.scatter_3d(
 )
 
 st.plotly_chart(fig, use_container_width=True)
+
+st.markdown("<br><br>", unsafe_allow_html=True)
+st.markdown("<div style='text-align: center; color: #718096; font-size: 0.9rem;'>Powered by <strong>MotherDuck</strong> × <strong>Sentence Transformers</strong> | RUCHE Team © 2026</div>", unsafe_allow_html=True)
