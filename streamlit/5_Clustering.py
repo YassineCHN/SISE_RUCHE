@@ -7,7 +7,7 @@ import plotly.express as px
 import umap
 import hdbscan
 from sentence_transformers import SentenceTransformer
-from config import MOTHERDUCK_DATABASE,EMBEDDING_MODEL,UMAP_PARAMS, HDBSCAN_PARAMS,CONTRACT_FLAGS
+from config import MOTHERDUCK_DATABASE,EMBEDDING_MODEL,UMAP_PARAMS, HDBSCAN_PARAMS
 from collections import Counter
 from dotenv import load_dotenv
 
