@@ -2,15 +2,41 @@ import streamlit as st
 import duckdb
 import pandas as pd
 import numpy as np
+import os
 import plotly.express as px
 import umap
 import hdbscan
 from sentence_transformers import SentenceTransformer
 from streamlit.config import MOTHERDUCK_DATABASE,EMBEDDING_MODEL,UMAP_PARAMS, HDBSCAN_PARAMS,CONTRACT_FLAGS
 from collections import Counter
+from dotenv import load_dotenv
 
+# ------------------------
+# CONNECTION DB
+# ------------------------
+dovenv_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), '.env')
+load_dotenv(dovenv_path)
+MOTHERDUCK_TOKEN = os.getenv("MOTHERDUCK_TOKEN")
+@st.cache_resource
+def get_motherduck_connection():
+    """Connexion au DataWhareHouse"""
+    try:
+        if not MOTHERDUCK_TOKEN:
+            st.error(" Missing MotherDuck Token")
+            st.stop()
+        
+        con = duckdb.connect(f"md:?motherduck_token={MOTHERDUCK_TOKEN}")
+        con.execute(f"CREATE DATABASE IF NOT EXISTS {MOTHERDUCK_DATABASE}")
+        con.close()
+        con = duckdb.connect(f"md:{MOTHERDUCK_DATABASE}?motherduck_token={MOTHERDUCK_TOKEN}")
+        
+        return con
+        
+    except Exception as e:
+        st.error(f"Erreur de connexion : {e}")
+        st.stop()
 
-con = duckdb.connect("MOTHERDUCK_DATABASE")
+con = get_motherduck_connection()
 # ------------------------
 # CACHE MODELE
 # ------------------------
