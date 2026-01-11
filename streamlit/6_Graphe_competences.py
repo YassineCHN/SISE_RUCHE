@@ -15,6 +15,7 @@ from dotenv import load_dotenv
 dovenv_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), '.env')
 load_dotenv(dovenv_path)
 MOTHERDUCK_TOKEN = os.getenv("MOTHERDUCK_TOKEN")
+
 @st.cache_resource
 def get_motherduck_connection():
     """Connexion à MotherDuck (fail-fast, sans try/except)."""
@@ -41,11 +42,12 @@ st.markdown("""
     [data-testid="stSidebar"] { background: linear-gradient(180deg, #f8f9fa 0%, #e9ecef 100%); }
 </style>
 """, unsafe_allow_html=True)
+
 # --------------------
 # SIDEBAR : FILTRES
 # --------------------
 
-st.sidebar.markdown("##  Filtres")
+st.sidebar.markdown("## 🔍 Filtres")
 limit = st.sidebar.slider(
     "Nombre d'offres analysées",
     min_value=200,
@@ -60,27 +62,25 @@ min_weight = st.sidebar.slider(
     20,
     5
 )
+
 # Filtre contrat
-st.sidebar.markdown("###  Type de contrat")
+st.sidebar.markdown("### 📋 Type de contrat")
 contract_filter = st.sidebar.multiselect(
     "Sélectionner un ou plusieurs types de contrat",
     options=['Tous','CDI', 'CDD', 'CONTRAT_PUBLIC', 'INTERIM', 'ALTERNANCE', 'STAGE', 'AUTRE'],
     default=['Tous']
 )
 
-
-
 # Filtre date
-st.sidebar.markdown("###  Date de publication")
+st.sidebar.markdown("### 📅 Date de publication")
 date_filter = st.sidebar.radio(
     "Publié depuis",
     options=['Toutes', '7 jours', '21 jours', '1 mois', '3 mois'],
     index=0
 )
 
-
 # Filtre région
-st.sidebar.markdown("###  Région")
+st.sidebar.markdown("### 🗺️ Région")
 region_filter = st.sidebar.multiselect(
     "Sélectionner une ou plusieurs régions",
     options=['Toutes','Auvergne-Rhône-Alpes', 'Bourgogne-Franche-Comté', 'Bretagne', 'Centre-Val de Loire', 'Corse', 'Grand Est', 'Hauts-de-France', 'Île-de-France', 'Normandie', 'Nouvelle-Aquitaine', 'Occitanie', 'Pays de la Loire', 'Provence-Alpes-Côte d\'Azur'],
@@ -97,8 +97,9 @@ if st.sidebar.button("🔄 Réinitialiser les filtres", use_container_width=True
 # ------------------------
 @st.cache_data
 def load_skills(_con, limit, contract_filter='Tous', date_filter='Toutes', region_filter='Toutes'):
+    """Charge les compétences depuis MotherDuck avec filtres appliqués"""
     
-    query=f"""
+    query = f"""
         SELECT hard_skills
         FROM f_offre f
         LEFT JOIN d_localisation l ON f.id_ville = l.id_ville
@@ -106,45 +107,55 @@ def load_skills(_con, limit, contract_filter='Tous', date_filter='Toutes', regio
         LEFT JOIN d_contrat c ON f.id_contrat = c.id_contrat
         LEFT JOIN d_date d ON f.id_date_publication = d.id_date
         WHERE hard_skills IS NOT NULL
-        LIMIT {limit}
-        
-        # Filtre contrat
-     if contract_filter and 'Tous' not in contract_filter:
-        query += "\n    AND c.type_contrat IN ('" + "', '".join(contract_filter) + "')"
-        
-         # Filtre date
-    if date_filter == '7 jours':
-        query += "\n    AND d.date_complete >= CURRENT_DATE - INTERVAL '7 days'"
-    elif date_filter == '21 jours':
-        query += "\n    AND d.date_complete >= CURRENT_DATE - INTERVAL '21 days'"
-    elif date_filter == '1 mois':
-        query += "\n    AND d.date_complete >= CURRENT_DATE - INTERVAL '30 days'"
-    elif date_filter == '3 mois':
-        query += "\n    AND d.date_complete >= CURRENT_DATE - INTERVAL '90 days'"
-        
-         # Filtre région
-    if region_filter and 'Toutes' not in region_filter:
-        query += "\n    AND r.nom_region IN ('" + "', '".join(region_filter) + "')"
     """
-    df = con.execute(query).df()
+    
+    # Filtre contrat
+    if contract_filter and 'Tous' not in contract_filter:
+        query += "\n        AND c.type_contrat IN ('" + "', '".join(contract_filter) + "')"
+    
+    # Filtre date
+    if date_filter == '7 jours':
+        query += "\n        AND d.date_complete >= CURRENT_DATE - INTERVAL '7 days'"
+    elif date_filter == '21 jours':
+        query += "\n        AND d.date_complete >= CURRENT_DATE - INTERVAL '21 days'"
+    elif date_filter == '1 mois':
+        query += "\n        AND d.date_complete >= CURRENT_DATE - INTERVAL '30 days'"
+    elif date_filter == '3 mois':
+        query += "\n        AND d.date_complete >= CURRENT_DATE - INTERVAL '90 days'"
+    
+    # Filtre région
+    if region_filter and 'Toutes' not in region_filter:
+        query += "\n        AND r.nom_region IN ('" + "', '".join(region_filter) + "')"
+    
+    query += f"\n        LIMIT {limit}"
+    
+    df = _con.execute(query).df()
     return df
 
 # -----------------------------------
-# CREATION DU DATAFRAME
+# CHARGEMENT DES DONNÉES
 # -----------------------------------
-df = load_skills(con, limit, 
-                 contract_filter=contract_filter, 
-                 date_filter=date_filter, 
-                 region_filter=region_filter 
-                 )
+st.title("🕸️ Graphe de Co-occurrence des Compétences")
+st.markdown("Visualisation des synergies technologiques dans les offres d'emploi data/IA")
+st.markdown("---")
+
+df = load_skills(
+    con, 
+    limit, 
+    contract_filter=contract_filter, 
+    date_filter=date_filter, 
+    region_filter=region_filter 
+)
+
+st.caption(f"📄 {len(df)} offres analysées après application des filtres")
 
 # ------------------------
 # BUILD GRAPH
 # ------------------------
 with st.spinner("Construction du graphe de co-occurrences..."):
-pairs = Counter()
-
-or skills in df["hard_skills"]:
+    pairs = Counter()
+    
+    for skills in df["hard_skills"]:
         if skills and isinstance(skills, str):
             # Si c'est une chaîne, on la split
             skills_list = [s.strip() for s in skills.split(',') if s.strip()]
@@ -169,14 +180,15 @@ or skills in df["hard_skills"]:
     G = nx.Graph()
     for a, b, w in edges:
         G.add_edge(a, b, weight=w)
-        
+
 # ------------------------
-# LAYOUT
+# LAYOUT ET VISUALISATION
 # ------------------------
 if len(G.nodes()) == 0:
     st.warning("⚠️ Aucune co-occurrence trouvée avec ces paramètres. Essayez de diminuer le seuil minimal ou d'augmenter le nombre d'offres.")
 else:
-    pos = nx.spring_layout(G, dim=3, seed=42, k=0.5, iterations=50)
+    with st.spinner("Calcul du layout 3D..."):
+        pos = nx.spring_layout(G, dim=3, seed=42, k=0.5, iterations=50)
     
     # Extraire les coordonnées et créer les traces
     x_nodes, y_nodes, z_nodes, text_nodes, size_nodes = [], [], [], [], []
@@ -250,7 +262,10 @@ else:
     
     st.plotly_chart(fig, use_container_width=True)
     
-    # Statistiques
+    # ------------------------
+    # STATISTIQUES
+    # ------------------------
+    st.markdown("---")
     col1, col2, col3 = st.columns(3)
     with col1:
         st.metric("🔵 Compétences", len(G.nodes()))
@@ -260,11 +275,14 @@ else:
         avg_degree = sum(dict(G.degree()).values()) / len(G.nodes()) if len(G.nodes()) > 0 else 0
         st.metric("📊 Connexions moyennes", f"{avg_degree:.1f}")
     
-    # Top synergies
+    # ------------------------
+    # TOP SYNERGIES
+    # ------------------------
     st.markdown("### 🔝 Top 10 des synergies technologiques")
     top_edges = sorted(edges, key=lambda x: x[2], reverse=True)[:10]
     
     top_df = pd.DataFrame(top_edges, columns=['Compétence A', 'Compétence B', 'Co-occurrences'])
     st.dataframe(top_df, use_container_width=True, hide_index=True)
+
 st.markdown("<br><br>", unsafe_allow_html=True)
-st.markdown("<div style='text-align: center; color: #718096; font-size: 0.9rem;'>Powered by <strong>MotherDuck</strong> × <strong>Sentence Transformers</strong> | RUCHE Team © 2026</div>", unsafe_allow_html=True)
+st.markdown("<div style='text-align: center; color: #718096; font-size: 0.9rem;'>Powered by <strong>MotherDuck</strong> × <strong>NetworkX</strong> | RUCHE Team © 2026</div>", unsafe_allow_html=True)
