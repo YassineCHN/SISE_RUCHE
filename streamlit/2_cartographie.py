@@ -11,11 +11,12 @@ import math
 from collections import Counter
 import sys
 import os
+from dotenv import load_dotenv
 
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from config import MOTHERDUCK_DATABASE
+dovenv_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), '.env')
+load_dotenv(dovenv_path)
 MOTHERDUCK_TOKEN = os.getenv("MOTHERDUCK_TOKEN")
-
 
 st.set_page_config(page_title="Cartographie", page_icon="🗺️", layout="wide")
 
