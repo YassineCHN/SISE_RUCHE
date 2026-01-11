@@ -1,4 +1,6 @@
-# RUCHE Data Lake - Job Scrapers
+# RUCHE Projet NLP 
+
+![Logo](streamlit/static/Logo3.png)
 
 ## Architecture
 ```
