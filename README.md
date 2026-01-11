@@ -161,32 +161,32 @@ Application **multi-pages** :
 
 ```
 RUCHE/
-├── data/
+├── data/        # Bases DuckDB locales (backup et environnement de travail)
 │   ├── backup_job_market.duckdb
 │   └── local.duckdb
 │
-├── scraping/
+├── scraping/    # Scripts de collecte des offres d’emploi
 │   ├── francetravail/
 │   ├── apec/
 │   ├── jobteaser/
 │   └── service_public/
 │
-├── mongodb/
+├── mongodb/    # Alimentation et gestion du BDD NoSql MongoDB
 │   ├── main_mongo.py
 │   ├── reference_apec.py
 │   ├── mongodb_load_jobteaser.py
 │   └── mongodb_utils.py
 │
-├── etl/
-│   ├── cleanX.py #Tout les "clean" fpnction de nettoyage de donnée
+├── etl/        # Pipeline ETL et traitements analytiques
+│   ├── cleanX.py  # Fonctions de nettoyage et normalisation des données
 │   ├── config_etl.py
 │   ├── etl_utils.py
 │   ├── etl_vectorization.py
-│   ├── tfidf_ml_data_filter.py
-│   ├── geolocation_enrichment.py # API pour longétude et latitude 
+│   ├── tfidf_ml_data_filter.py  # Filtrage ML Data / Non-Data (TF-IDF + Logistic Regression)
+│   ├── geolocation_enrichment.py # Enrichissement géographique (latitude / longitude via API)
 │   └── etl_motherduck.py
 │
-├── streamlit_app/
+├── streamlit_app/   # Application web interactive Streamlit
 │   ├── 1_home_page.py
 │   ├── 2_cartographie.py
 │   ├── 3_visualisation.py
@@ -197,18 +197,18 @@ RUCHE/
 │   ├── 8_about.py
 │   ├── app.py
 │   ├── config.py
-│   ├── static/ # Logo & images
-│   ├── db/
-│   └── analyse_competences/
+│   ├── static/   # Ressources statiques (logos, images)
+│   ├── db/       # Accès local aux bases pour l’app
+│   └── analyse_competences/ # Analyses spécifiques liées aux compétences
 │
-├── docs/
+├── docs/      # Documentation et notices techniques
 │   ├── Rapport.md
 │   ├── notice_france_travail_scraper.md
 │   ├── notice_TFIDF_ML_filtre_data_nondata.md
 │   └── notice_moteur_recherche_semantique.md
 │
-├── duck_to_mother.py
-├── pyproject.toml
+├── duck_to_mother.py    # Migration DuckDB local → MotherDuck
+├── pyproject.toml       # Configuration du projet Python
 ├── requirements.txt
 ├── test_connexion_duckdb.py
 ├── test_creation_duckdb.py
@@ -238,7 +238,7 @@ streamlit run app.py
 --- 
 ## 📚 Ressources associées
 
-- 📄 **Rapport académique (PDF)**  : [Projet NLP & Text Mining – Rapport RUCHE (Groupe 6)](documentation/SISE_NLP_Text_Mining_Rapport_Groupe6_RUCHE.pdf)
+- 📄 **Rapport académique (PDF)**  : [Projet NLP & Text Mining – Rapport RUCHE (Groupe 6)](/documentation/SISE%20NLP_Text%20Mining_Rapport_Groupe6_RUCHE.pdf)
 - 📘 **Notice technique – Filtrage ML Data / Non-Data**  : [TF-IDF & Régression logistique](documentation/notice_TFIDF_ML_filtre_data_nondata.md)
 - 📘 **Notice technique – Scraper France Travail**  : [API & Web Scraping France Travail](documentation/notice_france_travail_scraper.md)
 - 📘 **Notice technique – Moteur de recherche sémantique**  : [Recherche vectorielle & similarité cosinus](documentation/notice_moteur_recherche_semantique.md)
