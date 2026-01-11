@@ -185,11 +185,12 @@ streamlit run app.py
 --- 
 ## 👥 Équipe
 
-Romain Buono
-Yassine Cheniour
-Miléna Gordien-Piquet
-Anne-Camille Vial
+- Romain Buono
+-  Yassine Cheniour
+- Miléna Gordien-Piquet
+- Anne-Camille Vial
 
-🎓 Master 2 SISE – Université Lyon 2
-👨‍🏫 Encadrant : M. Ricco Rakotomalala
+#### 🎓 Master 2 SISE – Université Lyon 2####
+#### 👨‍🏫 Encadrant : M. Ricco Rakotomalala####
+
 ---
