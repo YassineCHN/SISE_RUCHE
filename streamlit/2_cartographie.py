@@ -40,6 +40,9 @@ def get_motherduck_connection():
         f"md:{MOTHERDUCK_DATABASE}?motherduck_token={MOTHERDUCK_TOKEN}"
     )
 
+# ✅ ICI EXACTEMENT
+conn = get_motherduck_connection()
+
 # ============================================================================
 # RÉCUPÉRATION DES VALEURS UNIQUES POUR LES FILTRES
 # ============================================================================
