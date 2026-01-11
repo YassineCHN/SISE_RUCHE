@@ -129,6 +129,7 @@ st.caption("Choisis la base cible (local ou MotherDuck).")
 
 mode = st.radio("Base", ["Local DuckDB", "MotherDuck"], horizontal=True)
 con = get_connection("MotherDuck" if mode == "MotherDuck" else "Local DuckDB")
+st.session_state["duckdb_connection"] = con
 
 # Charger dimensions
 with st.spinner("Chargement des dimensions..."):
@@ -175,12 +176,20 @@ with tab1:
                     else 0
                 ),
             )
+            DUREE_AUTORISEE = contract_type not in ["CDI"]
+
             duree_contrat_mois = st.number_input(
-                "Durée contrat (mois) (optionnel)", min_value=0, max_value=120, value=0
+                "Durée contrat (mois)",
+                min_value=0,
+                max_value=120,
+                value=0,
+                disabled=not DUREE_AUTORISEE,
             )
-            duree_contrat_mois = (
-                None if duree_contrat_mois == 0 else int(duree_contrat_mois)
-            )
+            if not DUREE_AUTORISEE:
+                duree_contrat_mois = None
+            elif duree_contrat_mois == 0:
+                duree_contrat_mois = None
+
             ville = st.selectbox(
                 "Ville (dimension) *",
                 options=list(ville_label_to_id.keys()),
@@ -328,9 +337,17 @@ with tab1:
                     "Job function", placeholder="Ex: Data / BI / Analytics"
                 )
             with col2:
+                today = dt.date.today()
+                MIN_DATE = dt.date(2025, 1, 1)
+                MAX_DATE = today + dt.timedelta(days=3)
                 publication_date = st.date_input(
-                    "Date de publication", value=dt.date.today(), format="DD/MM/YYYY"
+                    "Date de publication",
+                    value=today,
+                    min_value=MIN_DATE,
+                    max_value=MAX_DATE,
                 )
+                if publication_date > today:
+                    st.warning("⚠️ Date de publication dans le futur.")
                 education_level_raw = st.selectbox(
                     "Niveau d'études", options=EDU_OPTIONS, index=0
                 )
@@ -397,7 +414,7 @@ with tab1:
                     is_teletravail, salaire,
                     hard_skills, soft_skills, langages,
                     education_level, job_function, job_grade,
-                    is_duplicate, similarity_score
+                    None, None
                 )
                 VALUES (
                     ?, ?, ?, ?,
@@ -440,14 +457,15 @@ with tab1:
                         0.0,
                     ],
                 )
+                con.execute("CHECKPOINT")
                 st.success("✅ Offre ajoutée avec succès !")
                 st.info(f"job_id = {job_id}")
                 # Petit check d’affichage
                 inserted = con.execute(
-                    "SELECT job_id, title, company_name, id_ville, id_contrat, id_date_publication FROM f_offre WHERE job_id = ?",
+                    "SELECT * FROM f_offre WHERE job_id = ?",
                     [job_id],
                 ).fetchdf()
-                st.dataframe(inserted, use_container_width=True)
+                st.dataframe(inserted, width="stretch")
             except Exception as e:
                 st.error(f"❌ Insertion échouée: {e}")
 

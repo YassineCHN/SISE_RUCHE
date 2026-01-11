@@ -2,6 +2,7 @@ import streamlit as st
 import numpy as np
 import pandas as pd
 import time
+import atexit
 
 st.set_page_config(layout="wide")
 
@@ -31,3 +32,15 @@ pg = st.navigation(
 
 # Run the selected page
 pg.run()
+
+
+def close_connection():
+    try:
+        con = st.session_state.get("duckdb_connection")
+        if con:
+            con.close()
+    except Exception:
+        pass
+
+
+atexit.register(close_connection)
