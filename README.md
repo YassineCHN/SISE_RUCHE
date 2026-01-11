@@ -3,7 +3,22 @@ Projet NLP & Text Mining – Master 2 SISE (2025–2026)
 
 ### Application de cherche d'emplois
 
-![Logo](streamlit/static/Logo3.png)
+<p align="center">
+  <img src="streamlit/static/Logo3.png" alt="RUCHE" width="280">
+</p>
+
+![Python](https://img.shields.io/badge/Python-3.11+-3776AB?style=for-the-badge&logo=python&logoColor=white)
+![SQL](https://img.shields.io/badge/SQL-DuckDB-2E86C1?style=for-the-badge&logo=databricks&logoColor=white)
+![MongoDB](https://img.shields.io/badge/MongoDB-Data%20Lake-47A248?style=for-the-badge&logo=mongodb&logoColor=white)
+![MotherDuck](https://img.shields.io/badge/MotherDuck-DuckDB%20Cloud-FFD43B?style=for-the-badge&logo=duckdb&logoColor=black)
+![Streamlit](https://img.shields.io/badge/Streamlit-1.30+-FF4B4B?style=for-the-badge&logo=streamlit&logoColor=white)
+![Plotly](https://img.shields.io/badge/Plotly-Interactive%20Viz-3F4F75?style=for-the-badge&logo=plotly&logoColor=white)
+![Folium](https://img.shields.io/badge/Folium-Maps-77B829?style=for-the-badge)
+![Selenium](https://img.shields.io/badge/Selenium-Web%20Scraping-43B02A?style=for-the-badge&logo=selenium&logoColor=white)
+![BeautifulSoup](https://img.shields.io/badge/BeautifulSoup-HTML%20Parsing-59666C?style=for-the-badge)
+![Docker](https://img.shields.io/badge/Docker-Containerization-2496ED?style=for-the-badge&logo=docker&logoColor=white)
+![Mistral](https://img.shields.io/badge/Mistral-LLM%20API-FFB703?style=for-the-badge)
+
 
 ## Présentation du projet
 
@@ -221,6 +236,15 @@ streamlit run app.py
 ```
 
 --- 
+## 📚 Ressources associées
+
+- 📄 **Rapport académique (PDF)**  : [Projet NLP & Text Mining – Rapport RUCHE (Groupe 6)](documentation/SISE_NLP_Text_Mining_Rapport_Groupe6_RUCHE.pdf)
+- 📘 **Notice technique – Filtrage ML Data / Non-Data**  : [TF-IDF & Régression logistique](documentation/notice_TFIDF_ML_filtre_data_nondata.md)
+- 📘 **Notice technique – Scraper France Travail**  : [API & Web Scraping France Travail](documentation/notice_france_travail_scraper.md)
+- 📘 **Notice technique – Moteur de recherche sémantique**  : [Recherche vectorielle & similarité cosinus](documentation/notice_moteur_recherche_semantique.md)
+
+
+
 ## 👥 Équipe
 
 - Romain Buono
