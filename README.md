@@ -71,7 +71,7 @@ Le projet RUCHE s’inscrit dans le cadre du module **NLP & Text Mining** du Mas
 ```
 ┌───────────────┐    ┌────────────────────┐    ┌──────────────────────┐    ┌──────────────────────────┐    ┌──────────────────────┐
 │  Web Scraping │ →  │      MongoDB       │ →  │  ETL & Normalisation │ →  │        MotherDuck        │ →  │        Streamlit      │
-│ APIs/Crawlers │    │ Data Lake (JSON)   │    │ Nettoyage & Enrich.  │    │ Data Warehouse étoile   │    │ Recherche & Analyses  │
+│ APIs/Crawlers │    │ BDD NSql  (JSON)   │    │ Nettoyage & Enrich.  │    │ Data Warehouse étoile   │    │ Recherche & Analyses  │
 └───────────────┘    └────────────────────┘    └──────────────────────┘    └──────────────────────────┘    └──────────────────────┘
 ```
 
@@ -90,7 +90,7 @@ Quatre plateformes majeures ont été exploitées :
 - **Choisir le Service Public**  
   Scraping + extraction structurée assistée par LLM (Mistral)
 
-👉 Les données brutes sont stockées en **MongoDB Atlas** (NoSQL) au format **JSON**.
+Les données brutes sont stockées en **MongoDB Atlas** (NoSQL) au format **JSON**.
 
 ---
 
@@ -103,6 +103,44 @@ Le data warehouse repose sur **MotherDuck (DuckDB cloud)** avec :
 - **Dimensions** : `d_date`, `d_contrat`, `d_localisation`, `h_region`
 
 --- 
+
+## 🤖 NLP & Machine Learning
+
+### 🔎 Filtrage Data / Non-Data
+
+Approche hybride :
+- règles expertes (regex whitelist / blacklist)
+- **TF-IDF + régression logistique**
+
+Résultats :
+- **F1-score : 0.978**
+- **ROC-AUC : 0.996**
+- **+67 %** d’offres data récupérées par rapport aux regex seules
+
+---
+
+### 🔍 Recherche sémantique
+- Modèle : `sentence-transformers/paraphrase-multilingual-mpnet-base-v2`
+- Requêtes en **langage naturel**
+- Similarité cosinus calculée **côté base** (DuckDB)
+
+---
+
+## 🖥️ Application Streamlit
+
+Application **multi-pages** :
+- Recherche sémantique, par mot clé et filtre
+- Cartographie interactive (Folium + clustering)
+- Tableaux de bord analytiques (Plotly)
+- Ajout manuel d’offres et Chatbot LLM (Mistral) pour la structuration d’offres
+- Clustering sémantique (UMAP + HDBSCAN)
+- Graphe de co-occurrences des compétences
+
+🔒 Connexion sécurisée à MotherDuck via token  
+
+---
+
+
 
 ## Architecture du Projet 
 
@@ -173,8 +211,8 @@ pip install -r requirements_mongodo_ftscraper.txt
 
 2. **Configurer `.env` file:**
 ```env
-MOTHERDUCK_TOKEN=MOTHERDUCKDB_KEY
-MOTHERDUCK_DATABASE = "job_market_RUCHE"
+export MOTHERDUCK_TOKEN=...
+export MISTRAL_API_KEY=...
 ```
 
 3. **Lancer Streamlit**
@@ -190,7 +228,7 @@ streamlit run app.py
 - Miléna Gordien-Piquet
 - Anne-Camille Vial
 
-#### 🎓 Master 2 SISE – Université Lyon 2####
-#### 👨‍🏫 Encadrant : M. Ricco Rakotomalala####
+#### 🎓 Master 2 SISE – Université Lyon 2
+#### 👨‍🏫 Encadrant : M. Ricco Rakotomalala
 
 ---
