@@ -133,7 +133,7 @@ def load_skills(con, limit, contract_filter='Tous', date_filter='Toutes', region
 # -----------------------------------
 # CREATION DU DATAFRAME
 # -----------------------------------
-df = load_skills(limit, 
+df = load_skills(con, limit, 
                  contract_filter=contract_filter, 
                  date_filter=date_filter, 
                  region_filter=region_filter 
