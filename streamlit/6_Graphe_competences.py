@@ -96,7 +96,7 @@ if st.sidebar.button("🔄 Réinitialiser les filtres", use_container_width=True
 # DATA
 # ------------------------
 @st.cache_data
-def load_skills(con, limit, contract_filter='Tous', date_filter='Toutes', region_filter='Toutes'):
+def load_skills(_con, limit, contract_filter='Tous', date_filter='Toutes', region_filter='Toutes'):
     
     query=f"""
         SELECT hard_skills
@@ -124,10 +124,9 @@ def load_skills(con, limit, contract_filter='Tous', date_filter='Toutes', region
         
          # Filtre région
     if region_filter and 'Toutes' not in region_filter:
-        query += "\n    AND r.region_name IN ('" + "', '".join(region_filter) + "')"
+        query += "\n    AND r.nom_region IN ('" + "', '".join(region_filter) + "')"
     """
     df = con.execute(query).df()
-    con.close()
     return df
 
 # -----------------------------------
@@ -142,53 +141,130 @@ df = load_skills(con, limit,
 # ------------------------
 # BUILD GRAPH
 # ------------------------
+with st.spinner("Construction du graphe de co-occurrences..."):
 pairs = Counter()
 
-for skills in df["hard_skills"]:
-    if skills and len(skills) > 1:
-        for a, b in itertools.combinations(sorted(set(skills)), 2):
-            pairs[(a, b)] += 1
-
-edges = [
-    (a, b, w)
-    for (a, b), w in pairs.items()
-    if w >= min_weight
-]
-
-G = nx.Graph()
-for _, row in edges.iterrows():
-    G.add_edge(row.skill_1, row.skill_2, weight=row.weight)
-
+or skills in df["hard_skills"]:
+        if skills and isinstance(skills, str):
+            # Si c'est une chaîne, on la split
+            skills_list = [s.strip() for s in skills.split(',') if s.strip()]
+        elif skills and isinstance(skills, list):
+            # Si c'est déjà une liste
+            skills_list = skills
+        else:
+            continue
+            
+        if len(skills_list) > 1:
+            for a, b in itertools.combinations(sorted(set(skills_list)), 2):
+                pairs[(a, b)] += 1
+    
+    # Filtrer les paires par poids minimum
+    edges = [
+        (a, b, w)
+        for (a, b), w in pairs.items()
+        if w >= min_weight
+    ]
+    
+    # Créer le graphe
+    G = nx.Graph()
+    for a, b, w in edges:
+        G.add_edge(a, b, weight=w)
+        
 # ------------------------
 # LAYOUT
 # ------------------------
-pos = nx.spring_layout(G, dim=3, seed=42)
-x, y, z, text = [], [], [], []
-for node in G.nodes():
-    x.append(pos[node][0])
-    y.append(pos[node][1])
-    z.append(pos[node][2])
-    text.append(node)
-    size.append(G.degree(node) * 2)
-
-# ------------------------
-# VISUALISATION
-# ------------------------
-fig = go.Figure(
-    data=[go.Scatter3d(
-            x=x,
-            y=y,
-            z=z,
-            mode="markers",
-            marker=dict(size=size),
-            text=text,
-            hoverinfo="text"
-        )
-    ]
-)
-
-st.plotly_chart(fig, use_container_width=True)
-st.caption(f"{len(G.nodes())} compétences – {len(G.edges())} relations")
-
+if len(G.nodes()) == 0:
+    st.warning("⚠️ Aucune co-occurrence trouvée avec ces paramètres. Essayez de diminuer le seuil minimal ou d'augmenter le nombre d'offres.")
+else:
+    pos = nx.spring_layout(G, dim=3, seed=42, k=0.5, iterations=50)
+    
+    # Extraire les coordonnées et créer les traces
+    x_nodes, y_nodes, z_nodes, text_nodes, size_nodes = [], [], [], [], []
+    
+    for node in G.nodes():
+        x_nodes.append(pos[node][0])
+        y_nodes.append(pos[node][1])
+        z_nodes.append(pos[node][2])
+        text_nodes.append(f"{node}<br>Connexions: {G.degree(node)}")
+        size_nodes.append(G.degree(node) * 3 + 5)
+    
+    # Créer les arêtes
+    x_edges, y_edges, z_edges = [], [], []
+    edge_weights = []
+    
+    for edge in G.edges(data=True):
+        x0, y0, z0 = pos[edge[0]]
+        x1, y1, z1 = pos[edge[1]]
+        x_edges.extend([x0, x1, None])
+        y_edges.extend([y0, y1, None])
+        z_edges.extend([z0, z1, None])
+        edge_weights.append(edge[2]['weight'])
+    
+    # ------------------------
+    # VISUALISATION
+    # ------------------------
+    fig = go.Figure()
+    
+    # Ajouter les arêtes
+    fig.add_trace(go.Scatter3d(
+        x=x_edges,
+        y=y_edges,
+        z=z_edges,
+        mode='lines',
+        line=dict(color='rgba(125,125,125,0.3)', width=1),
+        hoverinfo='none',
+        name='Relations'
+    ))
+    
+    # Ajouter les nœuds
+    fig.add_trace(go.Scatter3d(
+        x=x_nodes,
+        y=y_nodes,
+        z=z_nodes,
+        mode='markers+text',
+        marker=dict(
+            size=size_nodes,
+            color=size_nodes,
+            colorscale='Viridis',
+            showscale=True,
+            colorbar=dict(title="Degré"),
+            line=dict(color='white', width=0.5)
+        ),
+        text=text_nodes,
+        hoverinfo='text',
+        textposition="top center",
+        name='Compétences'
+    ))
+    
+    fig.update_layout(
+        showlegend=False,
+        scene=dict(
+            xaxis=dict(visible=False),
+            yaxis=dict(visible=False),
+            zaxis=dict(visible=False),
+            bgcolor='rgba(240,240,240,0.1)'
+        ),
+        margin=dict(l=0, r=0, b=0, t=0),
+        height=700
+    )
+    
+    st.plotly_chart(fig, use_container_width=True)
+    
+    # Statistiques
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric("🔵 Compétences", len(G.nodes()))
+    with col2:
+        st.metric("🔗 Relations", len(G.edges()))
+    with col3:
+        avg_degree = sum(dict(G.degree()).values()) / len(G.nodes()) if len(G.nodes()) > 0 else 0
+        st.metric("📊 Connexions moyennes", f"{avg_degree:.1f}")
+    
+    # Top synergies
+    st.markdown("### 🔝 Top 10 des synergies technologiques")
+    top_edges = sorted(edges, key=lambda x: x[2], reverse=True)[:10]
+    
+    top_df = pd.DataFrame(top_edges, columns=['Compétence A', 'Compétence B', 'Co-occurrences'])
+    st.dataframe(top_df, use_container_width=True, hide_index=True)
 st.markdown("<br><br>", unsafe_allow_html=True)
 st.markdown("<div style='text-align: center; color: #718096; font-size: 0.9rem;'>Powered by <strong>MotherDuck</strong> × <strong>Sentence Transformers</strong> | RUCHE Team © 2026</div>", unsafe_allow_html=True)
