@@ -242,6 +242,7 @@ streamlit run app.py
 - 📘 **Notice technique – Filtrage ML Data / Non-Data**  : [TF-IDF & Régression logistique](documentation/notice_TFIDF_ML_filtre_data_nondata.md)
 - 📘 **Notice technique – Scraper France Travail**  : [API & Web Scraping France Travail](documentation/notice_france_travail_scraper.md)
 - 📘 **Notice technique – Moteur de recherche sémantique**  : [Recherche vectorielle & similarité cosinus](documentation/notice_moteur_recherche_semantique.md)
+- 📚 **API-Référentiel géographique français** : [API Géolocalisation](https://data.enseignementsup-recherche.gouv.fr/explore/dataset/fr-esr-referentiel-geographique/api/)
 
 
 
