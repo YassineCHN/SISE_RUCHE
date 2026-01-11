@@ -7,7 +7,7 @@ import plotly.express as px
 import umap
 import hdbscan
 from sentence_transformers import SentenceTransformer
-from config import MOTHERDUCK_DATABASE,EMBEDDING_MODEL,UMAP_PARAMS, HDBSCAN_PARAMS,CONTRACT_FLAGS
+from config import MOTHERDUCK_DATABASE,EMBEDDING_MODEL,UMAP_PARAMS, HDBSCAN_PARAMS
 from collections import Counter
 from dotenv import load_dotenv
 
@@ -184,7 +184,7 @@ def label_clusters(df, cluster_col="cluster_id", top_n=3):
 # -----------------------------------
 # CHARGEMENT DES DONNEES ET CALCULS
 # -----------------------------------
-df = load_data(limit, contract_filter=contract_filter, 
+df = load_data(con, limit, contract_filter=contract_filter, 
                date_filter=date_filter, 
                region_filter=region_filter)
 
