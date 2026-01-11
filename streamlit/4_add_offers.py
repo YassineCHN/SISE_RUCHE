@@ -12,6 +12,8 @@ import nltk
 from nltk.corpus import stopwords
 import re
 import unicodedata
+import json
+from mistralai import Mistral
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.append(str(PROJECT_ROOT))
@@ -20,6 +22,9 @@ sys.path.append(str(PROJECT_ROOT))
 load_dotenv(find_dotenv())
 token = os.getenv("MOTHERDUCK_TOKEN")
 MOTHERDUCK_TOKEN = token
+
+MISTRAL_API_KEY = os.getenv("MISTRAL_API_KEY")
+
 
 from etl.etl_utils import (
     normalize_company_name,
@@ -37,12 +42,115 @@ FRENCH_STOPWORDS = stopwords.words("french")
 # -----------------------------
 # Page config
 # -----------------------------
+
+
+def call_llm_format_offer(raw_text: str) -> dict:
+    """
+    Analyse une description brute d'offre et retourne un dict structuré
+    via le client Mistral officiel.
+    """
+    if not MISTRAL_API_KEY:
+        raise RuntimeError(
+            "MISTRAL_API_KEY manquant dans les variables d'environnement"
+        )
+
+    client = Mistral(api_key=MISTRAL_API_KEY)
+
+    prompt = f"""
+Tu es un assistant chargé d'extraire et structurer une offre d'emploi.
+
+Retourne UNIQUEMENT un JSON valide avec les champs suivants :
+- title
+- description
+- company_name
+- type_contrat
+- ville
+- salaire
+- hard_skills
+- soft_skills
+- langages
+
+Texte de l'offre :
+\"\"\"
+{raw_text}
+\"\"\"
+"""
+
+    response = client.chat.complete(
+        model="mistral-small-latest",
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0.0,
+        response_format={"type": "json_object"},  # ⭐ IMPORTANT
+    )
+
+    content = response.choices[0].message.content.strip()
+
+    try:
+        return json.loads(content)
+    except json.JSONDecodeError as e:
+        raise ValueError(f"Réponse LLM non JSON valide.\n\nRAW:\n{content}") from e
+
+
 st.markdown("# Ajout Offres 🆕")
+st.markdown("## 🧠 Assistance IA (optionnelle)")
+
+raw_offer = st.text_area(
+    "Collez ici une offre brute (copiée depuis une annonce)",
+    height=200,
+    placeholder="Collez ici le texte complet de l'offre...",
+)
+
+analyze_llm = st.button("Analyser avec l’IA")
+if analyze_llm:
+    if not raw_offer.strip():
+        st.warning("Veuillez coller une offre avant de lancer l'analyse.")
+    else:
+        with st.spinner("Analyse de l'offre par l'IA..."):
+            try:
+                llm_data = call_llm_format_offer(raw_offer)
+                st.session_state["llm_offer"] = llm_data
+                st.success("✅ Offre analysée. Formulaire prérempli ci-dessous.")
+            except Exception as e:
+                st.error(f"❌ Erreur lors de l'analyse IA : {e}")
 
 
 # -----------------------------
 # Connection helpers
 # -----------------------------
+def merge_options_with_defaults(options: list[str], defaults: list[str]) -> list[str]:
+    """
+    Garantit que toutes les valeurs par défaut sont présentes dans les options
+    (requis par st.multiselect).
+    """
+    merged = list(options)
+    for d in defaults:
+        if d not in merged:
+            merged.append(d)
+    return merged
+
+
+def normalize_llm_list(value):
+    """
+    Normalise une valeur issue du LLM vers une liste de strings.
+    Accepte :
+    - list[str]
+    - "a;b;c"
+    - "none" / None
+    """
+    if value is None:
+        return []
+
+    if isinstance(value, list):
+        return [str(v).strip() for v in value if str(v).strip()]
+
+    if isinstance(value, str):
+        if value.lower() in {"none", "unknown", ""}:
+            return []
+        return [v.strip() for v in value.split(";") if v.strip()]
+
+    return []
+
+
 def connect_duckdb_local() -> duckdb.DuckDBPyConnection:
     """
     Connexion DuckDB locale — DOIT pointer vers la base créée par l’ETL.
@@ -150,8 +258,8 @@ def is_exact_duplicate(title, description, candidates):
 
     for _, row in candidates.iterrows():
         if (
-            row["title"].strip().lower() == title_norm
-            and row["description"].strip().lower() == desc_norm
+            normalize_text(row["title"]) == title_norm
+            and normalize_text(row["description"]) == desc_norm
         ):
             return True, 1.0, row["job_id"]
 
@@ -250,19 +358,30 @@ tab1, tab2, tab3 = st.tabs(["Formulaire", "Scraping", "LLM"])
 
 with tab1:
     st.subheader("Nouvelle offre (insertion en base)")
+    llm_offer = st.session_state.get("llm_offer", {})
 
     with st.form("add_offer_form", enter_to_submit=False):
         st.markdown("### Champs importants ❗: ")
         colA, colB = st.columns(2)
 
         with colA:
-            title = st.text_input("Titre *", placeholder="Ex: Data Analyst (H/F)")
+            title = st.text_input(
+                "Titre *",
+                value=llm_offer.get("title", ""),
+                placeholder="Ex: Data Analyst (H/F)",
+            )
             source_url = st.text_input(
                 "URL source (optionnel)", placeholder="https://..."
             )
-            company_name = st.text_input("Entreprise", placeholder="Ex: Acme SAS")
-
-            description = st.text_area("Description *", height=180)
+            description = st.text_area(
+                "Description *",
+                value=llm_offer.get("description", ""),
+                height=180,
+            )
+            company_name = st.text_input(
+                "Entreprise",
+                value=llm_offer.get("company_name", ""),
+            )
 
         with colB:
 
@@ -402,11 +521,16 @@ with tab1:
 
         col1, col2, col3 = st.columns(3)
         with col1:
+            llm_hard = llm_offer.get("hard_skills")
+            hard_default = normalize_llm_list(llm_hard)
+            hard_options = merge_options_with_defaults(
+                HARD_SKILLS_REF,
+                hard_default,
+            )
             hard_skills = st.multiselect(
                 "Hard skills",
-                options=HARD_SKILLS_REF,
-                default=[],
-                accept_new_options=True,
+                options=hard_options,
+                default=hard_default,
             )
         with col2:
             soft_skills = st.multiselect(
