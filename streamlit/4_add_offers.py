@@ -8,6 +8,10 @@ import sys
 from pathlib import Path
 from dotenv import find_dotenv, load_dotenv
 from config import MOTHERDUCK_DATABASE
+import nltk
+from nltk.corpus import stopwords
+import re
+import unicodedata
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.append(str(PROJECT_ROOT))
@@ -24,6 +28,12 @@ from etl.etl_utils import (
     force_list,
 )
 
+try:
+    nltk.data.find("corpora/stopwords")
+except LookupError:
+    nltk.download("stopwords", quiet=True)
+
+FRENCH_STOPWORDS = stopwords.words("french")
 # -----------------------------
 # Page config
 # -----------------------------
@@ -120,6 +130,95 @@ def get_or_create_date_id(con: duckdb.DuckDBPyConnection, d: dt.date) -> int:
         ],
     )
     return next_id
+
+
+def normalize_text(text: str) -> str:
+    text = unicodedata.normalize("NFKD", text)
+    text = text.encode("ascii", "ignore").decode("ascii")
+    text = text.lower()
+    text = re.sub(r"\s+", " ", text)
+    return text.strip()
+
+
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics.pairwise import cosine_similarity
+
+
+def is_exact_duplicate(title, description, candidates):
+    title_norm = normalize_text(title)
+    desc_norm = normalize_text(description)
+
+    for _, row in candidates.iterrows():
+        if (
+            row["title"].strip().lower() == title_norm
+            and row["description"].strip().lower() == desc_norm
+        ):
+            return True, 1.0, row["job_id"]
+
+    return False, 0.0, None
+
+
+def detect_duplicate_streamlit(
+    con,
+    title: str,
+    description: str,
+    threshold: float = 0.85,
+    max_candidates: int = 200,
+):
+    """
+    Détection légère de doublons pour une insertion Streamlit.
+    Compare la nouvelle offre aux offres existantes (title + description).
+    """
+
+    # 1️⃣ Récupérer un sous-ensemble pertinent
+    candidates = con.execute(
+        """
+        SELECT job_id, title, description
+        FROM f_offre
+        WHERE title IS NOT NULL
+        AND title != ''
+        ORDER BY scraped_at DESC NULLS LAST
+        LIMIT ?
+        """,
+        [max_candidates],
+    ).fetchdf()
+
+    if candidates.empty:
+        return False, 0.0, None
+
+    is_dup_exact, score_exact, dup_id_exact = is_exact_duplicate(
+        title, description, candidates
+    )
+    if is_dup_exact:
+        return True, score_exact, dup_id_exact
+    # 2️⃣ Corpus
+    new_text = f"{title} {description}"
+    corpus = [new_text] + (
+        candidates["title"].fillna("") + " " + candidates["description"].fillna("")
+    ).tolist()
+
+    # 3️⃣ Vectorisation
+    vectorizer = TfidfVectorizer(
+        max_features=500,
+        stop_words=FRENCH_STOPWORDS,  # ✅ LISTE
+        ngram_range=(1, 2),
+        lowercase=True,
+        strip_accents="unicode",
+    )
+
+    tfidf = vectorizer.fit_transform(corpus)
+
+    # 4️⃣ Similarité
+    similarities = cosine_similarity(tfidf[0:1], tfidf[1:]).flatten()
+
+    best_score = similarities.max()
+    best_idx = similarities.argmax()
+
+    if best_score >= threshold:
+        duplicate_job_id = candidates.iloc[best_idx]["job_id"]
+        return True, float(best_score), duplicate_job_id
+
+    return False, float(best_score), None
 
 
 # -----------------------------
@@ -400,6 +499,25 @@ with tab1:
             scraped_at = dt.date.today()
             source_platform = "STREAMLIT"
 
+            BLOCKING_THRESHOLD = 0.9
+
+            is_dup, sim_score, dup_job_id = detect_duplicate_streamlit(
+                con,
+                title=title,
+                description=description,
+                threshold=BLOCKING_THRESHOLD,
+            )
+            # 🚫 Blocage si doublon quasi certain
+            if is_dup and sim_score >= BLOCKING_THRESHOLD:
+                st.error(
+                    f"❌ Insertion bloquée : cette offre est quasi identique à une offre existante "
+                    f"(similarité = {sim_score:.2f})."
+                )
+                st.info(f"Doublon détecté avec job_id : {dup_job_id}")
+                st.stop()  # ⛔ STOP AVANT INSERT
+            is_duplicate_db = bool(is_dup)
+            similarity_score_db = float(sim_score) if is_dup else None
+
             # Insert fact
             try:
                 con.execute(
@@ -414,7 +532,7 @@ with tab1:
                     is_teletravail, salaire,
                     hard_skills, soft_skills, langages,
                     education_level, job_function, job_grade,
-                    None, None
+                    is_duplicate, similarity_score
                 )
                 VALUES (
                     ?, ?, ?, ?,
@@ -453,8 +571,8 @@ with tab1:
                         education_level_norm,
                         job_function or None,
                         job_grade or None,
-                        False,
-                        0.0,
+                        is_duplicate_db,
+                        similarity_score_db,
                     ],
                 )
                 con.execute("CHECKPOINT")
