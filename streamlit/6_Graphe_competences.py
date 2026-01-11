@@ -34,12 +34,11 @@ min_weight = st.sidebar.slider(
 )
 # Filtre contrat
 st.sidebar.markdown("###  Type de contrat")
-filter_cdi = st.sidebar.checkbox("CDI", value=False)
-filter_cdd = st.sidebar.checkbox("CDD", value=False)
-filter_stage = st.sidebar.checkbox("Stage", value=False)
-filter_alternance = st.sidebar.checkbox("Alternance / Apprentissage", value=False)
-filter_freelance = st.sidebar.checkbox("Freelance", value=False)
-filter_interim = st.sidebar.checkbox("Intérim", value=False)
+contract_filter = st.sidebar.multiselect(
+    "Sélectionner un ou plusieurs types de contrat",
+    options=['Tous','CDI', 'CDD', 'CONTRAT_PUBLIC', 'INTERIM', 'ALTERNANCE', 'STAGE', 'AUTRE'],
+    default=['Tous']
+)
 
 
 
@@ -69,7 +68,7 @@ if st.sidebar.button("🔄 Réinitialiser les filtres", use_container_width=True
 # DATA
 # ------------------------
 @st.cache_data
-def load_skills(con, limit, contract_filters=None, date_filter='Toutes', region_filter='Toutes'):
+def load_skills(con, limit, contract_filter='Tous', date_filter='Toutes', region_filter='Toutes'):
     
     query=f"""
         SELECT hard_skills
@@ -80,24 +79,10 @@ def load_skills(con, limit, contract_filters=None, date_filter='Toutes', region_
         LEFT JOIN d_date d ON f.id_date_publication = d.id_date
         WHERE hard_skills IS NOT NULL
         LIMIT {limit}
-        # Filtre contrat
-    if contract_filters:
-        conditions = []
-        if contract_filters.get('cdi'):
-            conditions.append("c.is_cdi = TRUE")
-        if contract_filters.get('cdd'):
-            conditions.append("c.is_cdd = TRUE")
-        if contract_filters.get('stage'):
-            conditions.append("c.is_stage = TRUE")
-        if contract_filters.get('alternance'):
-            conditions.append("c.is_apprentissage = TRUE")
-        if contract_filters.get('freelance'):
-            conditions.append("c.is_freelance = TRUE")
-        if contract_filters.get('interim'):
-            conditions.append("c.is_interim = TRUE")
         
-        if conditions:
-            query += "\n    AND (" + " OR ".join(conditions) + ")"
+        # Filtre contrat
+     if contract_filter and 'Tous' not in contract_filter:
+        query += "\n    AND c.type_contrat IN ('" + "', '".join(contract_filter) + "')"
         
          # Filtre date
     if date_filter == '7 jours':
@@ -116,22 +101,14 @@ def load_skills(con, limit, contract_filters=None, date_filter='Toutes', region_
     df = con.execute(query).df()
     con.close()
     return df
-# Préparer les filtres
-contract_filters = {
-    'cdi': filter_cdi,
-    'cdd': filter_cdd,
-    'stage': filter_stage,
-    'alternance': filter_alternance,
-    'freelance': filter_freelance,
-    'interim': filter_interim
-}
 
 # -----------------------------------
 # CREATION DU DATAFRAME
 # -----------------------------------
 df = load_skills(limit, 
-                 contract_filters=contract_filters if any(contract_filters.values()) else None, 
-                 date_filter=date_filter, region_filter=region_filter 
+                 contract_filteront=concract_filter, 
+                 date_filter=date_filter, 
+                 region_filter=region_filter 
                  )
 
 # ------------------------
