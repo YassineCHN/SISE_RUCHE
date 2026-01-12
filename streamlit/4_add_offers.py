@@ -97,7 +97,6 @@ st.markdown(
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
     html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
-    [data-testid="stSidebar"] { background: linear-gradient(180deg, #f8f9fa 0%, #e9ecef 100%); }
 </style>
 """,
     unsafe_allow_html=True,
@@ -105,9 +104,34 @@ st.markdown(
 CURRENT_DIR = Path(__file__).resolve().parent
 LOGO_PATH = CURRENT_DIR / "static" / "Logo3.png"
 
-st.sidebar.image(str(LOGO_PATH), width=150)
 st.markdown("## 🧠 Assistance IA (optionnelle)")
+with st.sidebar:
+    st.sidebar.markdown("# 🐝 RUCHE")
+    st.image(str(LOGO_PATH), width=140)
 
+    st.markdown("## 🆕 Ajout d’une offre")
+    st.caption(
+        "Cette page permet d’ajouter manuellement une offre d’emploi "
+        "dans la base analytique RUCHE."
+    )
+
+    st.divider()
+
+    st.markdown("### 🧠 Assistance IA")
+    st.markdown(
+        "- Collez une offre brute\n"
+        "- L’IA extrait automatiquement les champs clés\n"
+        "- Vous pouvez modifier avant insertion"
+    )
+
+    st.divider()
+
+    st.markdown("### ⚠️ Bonnes pratiques")
+    st.markdown(
+        "- Vérifiez le **titre** et la **description**\n"
+        "- Sélectionnez la **ville exacte**\n"
+        "- Évitez les doublons"
+    )
 raw_offer = st.text_area(
     "Collez ici une offre brute (copiée depuis une annonce)",
     height=200,

@@ -41,56 +41,60 @@ col1, col2 = st.columns(2, gap="large")
 
 with col1:
     left = st.container(border=True)
+
+    left.markdown(
+        "<h3 style='text-align: center;'><u>🎯 Le projet RUCHE</u></h3>",
+        unsafe_allow_html=True,
+    )
+
+    # --- Image centrée ---
+    c1, c2, c3 = left.columns([2, 3, 2])
+    with c2:
+        st.image(str(LOGO_PATH), width=500)
+
+    # --- Description SOUS l’image ---
     left.markdown(
         """
-        <h3 style="text-align: center;"><u>🎯 Le projet RUCHE</u></h3>
-        <p style="text-align: justify; font-size: 1rem;">
+        <p style="text-align: justify; font-size: 1rem; margin-top: 1rem;">
             <b>RUCHE</b> est un système intégré d’acquisition, de structuration et d’analyse
-            d’offres d’emploi dans les domaines de la <b>data science</b> et de l’<b>intelligence artificielle</b>.
+            d’offres d’emploi dans les domaines de la <b>data science</b> et de l’
+            <b>intelligence artificielle</b>.
             L’objectif est de centraliser des sources hétérogènes et de fournir une exploration
             fiable et analytique du marché de l’emploi.
         </p>
         """,
         unsafe_allow_html=True,
     )
-
-    if LOGO_PATH.exists():
-        left.image(
-            str(LOGO_PATH),
-            width=330,
-            caption="RUCHE — Plateforme d’analyse du marché de l’emploi en Data & IA",
-        )
-    else:
-        left.warning(f"Logo introuvable : {LOGO_PATH}")
-
 with col2:
     right = st.container(border=True)
+
+    right.markdown(
+        "<h3 style='text-align: center;'><u>🏗️ Architecture applicative</u></h3>",
+        unsafe_allow_html=True,
+    )
+
+    # --- Image centrée ---
+    img_col1, img_col2, img_col3 = right.columns([1, 2, 1])
+    with img_col2:
+        right.image(str(ARCHI_PATH), use_container_width=True)
+
+    # --- Description SOUS l’image ---
     right.markdown(
         """
-        <h3 style="text-align: center;"><u>🏗️ Architecture applicative</u></h3>
-        <p style="text-align: justify; font-size: 1rem;">
+        <p style="text-align: justify; font-size: 1rem; margin-top: 1rem;">
             Le système s’articule autour de <b>quatre composantes principales</b> :
             <br>
-            <b>- </b> Scrapers multi-sources (plateformes d’emploi) <br>
-            <b>- </b> BDD NoSQL <b>MongoDB</b> (stockage brut/intermédiaire) <br>
-            <b>- </b> Entrepôt <b>MotherDuck</b> (modèle dimensionnel en étoile) <br>
-            <b>- </b> Application <b>Streamlit</b> multi-pages (analyse + visualisation) <br>
+            <b>-</b> Scrapers multi-sources (plateformes d’emploi)<br>
+            <b>-</b> BDD NoSQL <b>MongoDB</b> (stockage brut/intermédiaire)<br>
+            <b>-</b> Entrepôt <b>MotherDuck</b> (modèle dimensionnel en étoile)<br>
+            <b>-</b> Application <b>Streamlit</b> multi-pages (analyse & visualisation)<br>
+            <br>
             L’enrichissement s’appuie sur des techniques de <b>NLP</b> :
-            <i>Sentence Transformers</i>, filtrage <i>TF-IDF</i> + <i>régression logistique</i>,
-            et extraction assistée par modèles de langage.
+            <i>Sentence Transformers</i>, <i>TF-IDF</i> et modèles de langage.
         </p>
         """,
         unsafe_allow_html=True,
     )
-
-    if ARCHI_PATH.exists():
-        right.image(
-            str(ARCHI_PATH),
-            use_container_width=True,
-            caption="Architecture globale du système RUCHE",
-        )
-    else:
-        right.warning(f"Image architecture introuvable : {ARCHI_PATH}")
 
 # ============================================================
 # SECTION 2 : CHIFFRES CLÉS + STACK + ÉQUIPE

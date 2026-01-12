@@ -42,8 +42,11 @@ st.markdown("---")
 # ----------------------
 CURRENT_DIR = Path(__file__).resolve().parent
 LOGO_PATH = CURRENT_DIR / "static" / "Logo3.png"
-
-st.sidebar.image(str(LOGO_PATH), width=150)
+with st.sidebar:
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        st.markdown("# 🐝 RUCHE")
+        st.image(str(LOGO_PATH), width=140)
 st.sidebar.markdown("## 🔍 Filtres")
 
 limit = st.sidebar.slider(

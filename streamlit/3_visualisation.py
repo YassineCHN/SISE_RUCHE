@@ -19,13 +19,40 @@ st.set_page_config(
 CURRENT_DIR = Path(__file__).resolve().parent
 LOGO_PATH = CURRENT_DIR / "static" / "Logo3.png"
 
-st.sidebar.image(str(LOGO_PATH), width=150)
+with st.sidebar:
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        st.markdown("# 🐝 RUCHE")
+        st.image(str(LOGO_PATH), width=140)
+    st.markdown("## 📊 Visualisation")
+    st.caption(
+        "Analyse exploratoire du marché de l’emploi Data & IA "
+        "à partir des offres collectées et enrichies."
+    )
+
+    st.divider()
+
+    st.markdown("### 🔍 Ce que vous voyez")
+    st.markdown(
+        "- Distribution des **salaires** par métier\n"
+        "- Comparaison **régionale**\n"
+        "- Analyse des **compétences techniques**\n"
+        "- Clustering sémantique des intitulés"
+    )
+
+    st.divider()
+
+    st.markdown("### 💡 Comment lire les graphiques")
+    st.markdown(
+        "- Les barres représentent des **moyennes**\n"
+        "- Les tailles indiquent le **volume d’offres**\n"
+        "- Les clusters regroupent des métiers similaires"
+    )
 st.markdown(
     """
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
     html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
-    [data-testid="stSidebar"] { background: linear-gradient(180deg, #f8f9fa 0%, #e9ecef 100%); }
 </style>
 """,
     unsafe_allow_html=True,
