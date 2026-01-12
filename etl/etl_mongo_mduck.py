@@ -35,11 +35,6 @@ from pymongo import MongoClient
 # MotherDuck
 import duckdb
 
-# import Mduckdb name
-from config_etl import MOTHERDUCK_DATABASE
-
-# Import Mduckdb name from config file
-from config_etl import MOTHERDUCK_DATABASE
 
 # NLP & ML
 from sklearn.feature_extraction.text import TfidfVectorizer
@@ -64,7 +59,12 @@ from etl_utils import (
     force_list,
     serialize_list,
 )
+import sys
 
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+from ruche.db import get_connection
 
 # Configuration
 warnings.filterwarnings("ignore")
@@ -719,48 +719,6 @@ def clean_job_data(df: pd.DataFrame, output_file: str = OUTPUT_CLEANED) -> pd.Da
 # ============================================================================
 # PHASE 3: STAR SCHEMA MODELING - MOTHERDUCK/DUCKDB
 # ============================================================================
-
-
-def connect_duckdb_local():
-    # Chemin racine du projet (SISE_RUCHE)
-    project_root = Path(__file__).resolve().parents[1]
-
-    # data/local.duckdb au niveau racine
-    duckdb_path = project_root / "data" / "local.duckdb"
-
-    # Créer le dossier data si absent
-    duckdb_path.parent.mkdir(parents=True, exist_ok=True)
-
-    print(f"✓ Using local DuckDB: {duckdb_path}")
-    return duckdb.connect(str(duckdb_path))
-
-
-def connect_motherduck(
-    token: str = MOTHERDUCK_TOKEN, database: str = MOTHERDUCK_DATABASE
-) -> duckdb.DuckDBPyConnection:
-    """Connect to MotherDuck cloud database with fallback to local"""
-    print("=" * 80)
-    print("PHASE 6: MOTHERDUCK CONNECTION")
-    print("=" * 80)
-
-    try:
-        if not token:
-            raise ValueError("MOTHERDUCK_TOKEN not found in environment")
-
-        con = duckdb.connect("md:?motherduck_token={}".format(token))
-        con.execute("CREATE DATABASE IF NOT EXISTS {}".format(database))
-        con.close()
-        con = duckdb.connect("md:{}?motherduck_token={}".format(database, token))
-
-        print(f"✓ Connected to MotherDuck: {database}\n")
-        return con
-
-    except Exception as e:
-        print("WARNING: MotherDuck connection failed: {}".format(e))
-        local_db = "Job_Analyses_RUCHE_v2.duckdb"  # Milena
-        con = duckdb.connect(local_db)
-        print("✓ Using local DuckDB\n")
-        return con
 
 
 def create_star_schema_ddl(con: duckdb.DuckDBPyConnection) -> None:
@@ -1453,7 +1411,7 @@ def main():
     print("  Collections: {}".format(", ".join(COLLECTIONS)))
     print("  Document limit: {}".format(LIMIT if LIMIT else "ALL"))
     print("  Similarity threshold: {}".format(SIMILARITY_THRESHOLD))
-    print("  MotherDuck Database: {}".format(MOTHERDUCK_DATABASE))
+    print("  Database backend: DuckDB / MotherDuck (auto)")
 
     # PHASE 1: ETL
     try:
@@ -1488,10 +1446,7 @@ def main():
     print("=" * 80)
     con = None
     try:
-        if ENV == "dev":
-            con = connect_duckdb_local()
-        else:
-            con = connect_motherduck()
+        con = get_connection()
 
         df_cleaned["publication_date"] = df_cleaned["publication_date"].apply(
             normalize_publication_date
@@ -1540,7 +1495,7 @@ def main():
     print("\nData quality:")
     print("  Records removed: {}".format(len(df_raw) - len(df_cleaned)))
     print("  Retention rate: {:.1f}%".format(len(df_cleaned) / len(df_raw) * 100))
-    print("  Database: {}".format(MOTHERDUCK_DATABASE))
+    print("  Database backend: DuckDB / MotherDuck (auto)")
 
     return df_cleaned
 

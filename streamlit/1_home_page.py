@@ -9,12 +9,6 @@ from dotenv import load_dotenv, find_dotenv
 
 load_dotenv(find_dotenv())
 
-token = os.getenv("MOTHERDUCK_TOKEN")
-if not token:
-    st.error("ERREUR: Token MotherDuck manquant!")
-    st.stop()
-
-MOTHERDUCK_TOKEN = token
 st.set_page_config(layout="wide", page_title="Recherche Sémantique", page_icon="🔍")
 
 st.markdown(

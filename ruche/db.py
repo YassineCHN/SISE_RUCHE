@@ -7,8 +7,11 @@ import platform
 def get_connection(read_only=False):
     motherduck_token = os.getenv("MOTHERDUCK_TOKEN")
     motherduck_db = os.getenv("MOTHERDUCK_DB")
+    conn_mode = os.getenv("CONNEXION_MODE")  # 'offline' | 'online' | None
 
-    if motherduck_token and motherduck_db:
+    if conn_mode == "online" or (
+        conn_mode is None and motherduck_token and motherduck_db
+    ):
         return duckdb.connect(
             f"md:{motherduck_db}",
             read_only=read_only,
@@ -16,7 +19,10 @@ def get_connection(read_only=False):
         )
     # --- DuckDB local ---
     db_path = None
-    db_path_env = os.getenv("DUCKDB_PATH")
+    if conn_mode == "offline":
+        db_path_env = os.getenv("DUCKDB_PATH")
+    else:
+        db_path_env = os.getenv("DUCKDB_PATH")
 
     if db_path_env:
         # Cas path Unix fourni sur Windows (ex: /data/local.duckdb)
