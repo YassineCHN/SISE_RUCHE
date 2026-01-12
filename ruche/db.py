@@ -1,5 +1,7 @@
 import os
 import duckdb
+from pathlib import Path
+import platform
 
 
 def get_connection(read_only=False):
@@ -12,7 +14,24 @@ def get_connection(read_only=False):
             read_only=read_only,
             config={"motherduck_token": motherduck_token},
         )
+    # --- DuckDB local ---
+    db_path = None
+    db_path_env = os.getenv("DUCKDB_PATH")
 
-    # Fallback DuckDB local
-    db_path = os.getenv("DUCKDB_PATH", "/data/local.duckdb")
-    return duckdb.connect(db_path, read_only=read_only)
+    if db_path_env:
+        # Cas path Unix fourni sur Windows (ex: /data/local.duckdb)
+        if platform.system() == "Windows" and db_path_env.startswith("/"):
+            db_path = None
+        else:
+            candidate = Path(db_path_env)
+            if candidate.is_absolute() and not candidate.exists():
+                db_path = None
+            else:
+                db_path = candidate
+
+    if db_path is None:
+        # fallback local propre
+        project_root = Path(__file__).resolve().parents[1]
+        db_path = project_root / "data" / "local.duckdb"
+
+    return duckdb.connect(str(db_path), read_only=read_only)
