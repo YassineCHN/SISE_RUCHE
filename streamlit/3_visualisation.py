@@ -1,6 +1,6 @@
 import os
 import streamlit as st
-from sympy import re 
+import re
 import pandas as pd
 import plotly.express as px
 from dotenv import load_dotenv
@@ -10,235 +10,324 @@ import hdbscan
 from ruche.db import get_connection
 
 
-st.set_page_config(layout="wide", page_title="Visualisation des données", page_icon="💼")
+st.set_page_config(
+    layout="wide", page_title="Visualisation des données", page_icon="💼"
+)
 st.sidebar.image("./static/Logo3.png", width=150)
-st.markdown("""
+st.markdown(
+    """
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
     html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
     [data-testid="stSidebar"] { background: linear-gradient(180deg, #f8f9fa 0%, #e9ecef 100%); }
 </style>
-""", unsafe_allow_html=True)
+""",
+    unsafe_allow_html=True,
+)
 
-# --- CONNEXION MOTHERDUCK ---
-
-
+# --- CONNEXION --
 db = get_connection()
+
+
 # --- CHARGEMENT DES DONNÉES ---
 @st.cache_data
-def load_data():
+def load_data(_db):
+    """Charge les données depuis MotherDuck"""
     query = """
     SELECT 
-        job_id, 
-        title, 
-        salaire, 
-        nom_region, 
-        hard_skills, 
-        id_date_publication
+        f.job_id, 
+        f.title, 
+        f.salaire, 
+        r.nom_region, 
+        f.hard_skills, 
+        f.id_date_publication
     FROM f_offre f
     LEFT JOIN d_localisation l ON f.id_ville = l.id_ville
     LEFT JOIN h_region r ON l.id_region = r.id_region
     LEFT JOIN d_contrat c ON f.id_contrat = c.id_contrat
     LEFT JOIN d_date d ON f.id_date_publication = d.id_date
+    WHERE f.salaire IS NOT NULL
     """
-    return db.execute(query).df()
+    return _db.execute(query).df()
 
-# --- TRAITEMENT DES COMPÉTENCES (Top 5) ---
-def get_top_skills(dataframe):
-    # On explose la colonne compétences si elle est stockée sous forme de liste ou texte
-    all_skills = dataframe['hard_skills'].str.split(',').explode().str.strip()
-    return all_skills.value_counts().head(5)
 
 # --- FONCTION DE NETTOYAGE DES SALAIRES ---
 def parse_salary_range(salary_str):
+    """Parse une chaîne de salaire et retourne un float représentant la moyenne"""
     if pd.isna(salary_str) or not isinstance(salary_str, str):
         return None
-    
-    # 1. Nettoyage de base : passage en minuscule et remplacement du 'k' et des espaces éventuels
-    clean_str = salary_str.lower().replace(' ', '').replace('k', '000').replace('€', '')
-    
-    # Extraction de tous les nombres présents dans la chaîne
-    numbers = re.findall(r'\d+', clean_str)
+
+    # Nettoyage de base
+    clean_str = (
+        salary_str.lower()
+        .replace(" ", "")
+        .replace("k", "000")
+        .replace("€", "")
+        .replace(",", "")
+    )
+
+    # Extraction de tous les nombres
+    numbers = re.findall(r"\d+", clean_str)
     if not numbers:
         return None
-    
-    # Convertir les extractions en float
+
+    # Convertir en float
     vals = [float(n) for n in numbers]
 
-    # 2. Logique selon les opérateurs
-    if '<' in clean_str:
-        # Cas "< 25k€" -> On prend la borne haute
+    # Logique selon les opérateurs
+    if "<" in clean_str:
         return vals[0]
-    
-    elif '>' in clean_str:
-        # Cas "> 100k€" -> On prend la borne basse
+    elif ">" in clean_str:
         return vals[0]
-    
-    elif '-' in clean_str or 'à' in clean_str:
-        # Cas "25k - 30k" -> Moyenne de l'intervalle
+    elif "-" in clean_str or "à" in clean_str:
         if len(vals) >= 2:
             return (vals[0] + vals[1]) / 2
         return vals[0]
     else:
-        # Cas "40000" (valeur unique)
         return vals[0]
-        
-# --- FONCTION DE CLUSTERING DES TITRES---
-def cluster_job_titles(df, column='title'):
-    # 1. Nettoyage et extraction des titres uniques pour optimiser le calcul
-    unique_titles = df[column].unique().tolist()
-    
-    # 2. Embedding (Encodage sémantique)
-    # On utilise un modèle multilingue performant pour le français
-    model = SentenceTransformer('paraphrase-multilingual-MiniLM-L12-v2')
-    embeddings = model.encode(unique_titles, show_progress_bar=True)
-    
-    # 3. Réduction de dimension avec UMAP
-    # On réduit à 5 dimensions pour aider HDBSCAN à trouver les densités
+
+
+# --- FONCTION DE CLUSTERING DES TITRES ---
+@st.cache_data
+def cluster_job_titles(df, column="title"):
+    """Cluster les titres de poste similaires en groupes sémantiques"""
+
+    # Extraction des titres uniques
+    unique_titles = df[column].dropna().unique().tolist()
+
+    if len(unique_titles) == 0:
+        df["titre_standardise"] = df[column]
+        return df
+
+    if len(unique_titles) < 5:
+        # Pas assez de données pour faire un clustering
+        df["titre_standardise"] = df[column]
+        return df
+
+    # Embedding
+    model = SentenceTransformer("paraphrase-multilingual-MiniLM-L12-v2")
+    embeddings = model.encode(unique_titles, show_progress_bar=False)
+
+    # Réduction de dimension avec UMAP
+    n_neighbors = min(15, len(unique_titles) - 1)
+    n_components = min(5, len(unique_titles) - 1)
+
     reducer = umap.UMAP(
-        n_neighbors=15, 
-        n_components=5, 
-        metric='cosine', 
-        random_state=42
+        n_neighbors=n_neighbors,
+        n_components=n_components,
+        metric="cosine",
+        random_state=42,
     )
     u_embeddings = reducer.fit_transform(embeddings)
-    
-    # 4. Clustering avec HDBSCAN
-    # min_cluster_size : taille minimale pour former un groupe
+
+    # Clustering avec HDBSCAN
+    min_cluster_size = max(3, len(unique_titles) // 20)
     clusterer = hdbscan.HDBSCAN(
-        min_cluster_size=3, 
-        metric='euclidean', 
-        cluster_selection_method='eom'
+        min_cluster_size=min_cluster_size,
+        metric="euclidean",
+        cluster_selection_method="eom",
     )
-    labels = clusterer.fit_labels(u_embeddings)
-    
-    # 5. Création d'une table de correspondance
-    mapping_df = pd.DataFrame({
-        column: unique_titles,
-        'cluster_id': labels
-    })
-    
-    # Nommer les clusters par leur titre le plus fréquent
+    labels = clusterer.fit_predict(u_embeddings)
+
+    # Création d'une table de correspondance
+    mapping_df = pd.DataFrame({column: unique_titles, "cluster_id": labels})
+
+    # Nommer les clusters
     def get_representative_name(cluster_id):
-        if cluster_id == -1: return "Autres / Non classé"
-        # On prend le titre le plus court du cluster comme nom "propre"
-        cluster_titles = mapping_df[mapping_df['cluster_id'] == cluster_id][column]
+        if cluster_id == -1:
+            return "Autres / Non classé"
+        cluster_titles = mapping_df[mapping_df["cluster_id"] == cluster_id][column]
+        if len(cluster_titles) == 0:
+            return f"Cluster {cluster_id}"
         return min(cluster_titles, key=len)
 
     cluster_names = {cid: get_representative_name(cid) for cid in set(labels)}
-    mapping_df['titre_standardise'] = mapping_df['cluster_id'].map(cluster_names)
-    
+    mapping_df["titre_standardise"] = mapping_df["cluster_id"].map(cluster_names)
+
     # Fusionner avec le dataframe d'origine
-    return df.merge(mapping_df[[column, 'titre_standardise']], on=column, how='left')
-    
-    # --- PRÉPARATION DES DONNÉES ---
-df = load_data()
-df['salaire_moyen'] = df['salaire'].apply(parse_salary_range)
-# Suppression des lignes où le salaire n'a pas pu être extrait
-df_clean = df.dropna(subset=['salaire_moyen'])
-#Cluster des titres
-df_clean = cluster_job_titles(df_clean)
+    return df.merge(mapping_df[[column, "titre_standardise"]], on=column, how="left")
+
 
 # --- INTERFACE STREAMLIT ---
-st.divider()
-st.sidebar.markdown("# Visualisation du Marché de l'Emploi Data et IA")
+st.title("📊 Visualisation du Marché de l'Emploi Data et IA")
+st.markdown("Analyse des salaires, compétences et répartition géographique des offres")
+st.markdown("---")
 
-# Row 1: KPIs
-col1, col2, col3 = st.columns(3)
+# --- PRÉPARATION DES DONNÉES ---
+with st.spinner("Chargement des données depuis MotherDuck..."):
+    df = load_data(db)
+
+with st.spinner("Traitement des salaires..."):
+    df["salaire_moyen"] = df["salaire"].apply(parse_salary_range)
+    df_clean = df.dropna(subset=["salaire_moyen"])
+
+with st.spinner("Clustering des titres de poste..."):
+    df_clean = cluster_job_titles(df_clean)
+
+st.caption(f"📄 {len(df_clean)} offres analysées avec salaires valides")
+
+# --- ROW 1: KPIs ---
+col1, col2, col3, col4 = st.columns(4)
+
 with col1:
-    st.metric("Offres analysées", len(df_clean))
-with col2:
-    global_avg = df_clean['salaire_moyen'].mean()
-    st.metric("Salaire Moyen Global", f"{global_avg:,.0f} €")
-with col3:
-    st.metric("Salaire Médian", f"{df_clean['salaire_moyen'].median():,.0f} €")
+    st.metric("📋 Offres", f"{len(df_clean):,}")
 
-st.divider()
-# Row 2: Graphiques
+with col2:
+    global_avg = df_clean["salaire_moyen"].mean()
+    st.metric("💰 Salaire Moyen", f"{global_avg:,.0f} €")
+
+with col3:
+    median_salary = df_clean["salaire_moyen"].median()
+    st.metric("📊 Salaire Médian", f"{median_salary:,.0f} €")
+
+with col4:
+    n_regions = df_clean["nom_region"].nunique()
+    st.metric("🗺️ Régions", n_regions)
+
+st.markdown("---")
+
+# --- ROW 2: GRAPHIQUES SALAIRES ---
 col_left, col_right = st.columns([2, 1])
 
 with col_left:
-    st.subheader(" Salaire moyen par intitulé de poste")
-    # Groupement par intitulé (on prend les 5 plus fréquents pour la lisibilité)
-    top_jobs = df_clean['titre_standardise'].value_counts().nlargest(5).index
-    df_top_jobs = df_clean[df_clean['titre_standardise'].isin(top_jobs)]
-    
-    avg_salary_cluster = df_salaires.groupby('titre_standardise')['salaire_moyen'].mean().sort_values(ascending=True).reset_index()
+    st.subheader("💼 Salaire moyen par intitulé de poste")
 
-fig_salary = px.bar(
-    avg_salary_cluster,
-    x='salaire_moyen',
-    y='titre_standardise',
-    orientation='h',
-    text_auto='.2s',
-    labels={'salaire_moyen': 'Salaire Moyen (€)', 'titre_standardise': 'Métier (Cluster)'},
-    color='salaire_moyen',
-    color_continuous_scale='BuGn'
-)
-fig_salary.update_layout(yaxis={'categoryorder':'total ascending'})
-st.plotly_chart(fig_salary, use_container_width=True)
+    # Groupement par titre standardisé
+    avg_salary_cluster = (
+        df_clean.groupby("titre_standardise")["salaire_moyen"]
+        .agg(["mean", "count"])
+        .reset_index()
     )
-    st.plotly_chart(fig_salary, use_container_width=True)
+    avg_salary_cluster.columns = ["titre_standardise", "salaire_moyen", "count"]
+
+    # Filtrer les clusters avec au moins 3 offres
+    avg_salary_cluster = avg_salary_cluster[avg_salary_cluster["count"] >= 3]
+
+    # Garder les 10 plus hauts salaires
+    avg_salary_cluster = avg_salary_cluster.nlargest(10, "salaire_moyen")
+
+    if len(avg_salary_cluster) > 0:
+        fig_salary = px.bar(
+            avg_salary_cluster,
+            x="salaire_moyen",
+            y="titre_standardise",
+            orientation="h",
+            text_auto=".0f",
+            labels={
+                "salaire_moyen": "Salaire Moyen (€)",
+                "titre_standardise": "Métier",
+            },
+            color="salaire_moyen",
+            color_continuous_scale="BuGn",
+        )
+        fig_salary.update_layout(
+            yaxis={"categoryorder": "total ascending"}, showlegend=False, height=400
+        )
+        fig_salary.update_traces(texttemplate="%{x:,.0f} €", textposition="outside")
+        st.plotly_chart(fig_salary, width="stretch")
+    else:
+        st.info("Pas assez de données pour afficher les salaires par métier")
 
 with col_right:
-    st.subheader(" Salaires par Région")
-    avg_salary_region = df_clean.groupby('region')['salaire_moyen'].mean().sort_values(ascending=False).reset_index()
-    
-    fig_region_sal = px.scatter(
-        avg_salary_region,
-        x='region',
-        y='salaire_moyen',
-        size='salaire_moyen',
-        color='region',
-        showlegend=False
-    )
-    st.plotly_chart(fig_region_sal, use_container_width=True)
+    st.subheader("🗺️ Salaires par Région")
 
-# Row 3: Compétences (Rappel du besoin précédent)
-st.subheader(" Top 5 des compétences les plus demandées")
-all_skills = df['hard_skills'].str.split(',').explode().str.strip()
-top_skills = all_skills.value_counts().head(5).reset_index()
-st.table(top_skills.rename(columns={'count': 'Nombre d\'offres', 'hard_skills': 'Compétence'}))
-
-# 1. Préparation des données : on garde le lien entre le titre et les compétences
-# Séparation des compétences en listes
-df['skill_list'] = df['hard_skills'].str.split(',')
-
-# "explode" sur la liste de compétences (le titre est dupliqué pour chaque compétence)
-df_exploded = df.explode('skill_list')
-
-# Nettoyage : espaces et mise en forme
-df_exploded['skill_list'] = df_exploded['skill_list'].str.strip().str.capitalize()
-
-# Suppression des lignes vides éventuelles
-df_exploded = df_exploded[df_exploded['skill_list'] != ""]
-
-# 2. Agrégation pour le graphique (on compte le nombre d'occurrences par métier et compétence)
-top_7_skills = df_exploded['skill_list'].value_counts().nlargest(7).index
-sunburst_data = (
-    df_exploded[df_exploded['skill_list'].isin(top_7_skills)]
-    .groupby(['title_standardisé', 'skill_list'])
-    .size()
-    .reset_index(name='Nombre d\'offres')
-)
-
-# 3. Création du graphique Sunburst
-fig = px.sunburst(
-    sunburst_data,
-    path=['title_standardisé', 'skill_list'],
-    values='Nombre d\'offres',
-    color='title_standardisé',               
-    title="Top compétences par intitulé de poste"
-)
-
-# Affichage dans Streamlit
-st.plotly_chart(fig, use_container_width=True)
-
-with st.container(border=False, horizontal=True, horizontal_alignment="center"):
-    st.markdown(
-        "<p style='text-align: center;'>Date de dernière Mise à jour de la BDD : DD//MM//YYYY</p>",
-        unsafe_allow_html=True,
+    avg_salary_region = (
+        df_clean.groupby("nom_region")["salaire_moyen"]
+        .mean()
+        .sort_values(ascending=False)
+        .reset_index()
     )
 
-st.markdown("<br><br>", unsafe_allow_html=True)
-st.markdown("<div style='text-align: center; color: #718096; font-size: 0.9rem;'>Powered by <strong>MotherDuck</strong> × <strong>Sentence Transformers</strong> | RUCHE Team © 2026</div>", unsafe_allow_html=True)
+    if len(avg_salary_region) > 0:
+        fig_region_sal = px.scatter(
+            avg_salary_region,
+            x="nom_region",
+            y="salaire_moyen",
+            size="salaire_moyen",
+            color="nom_region",
+            labels={"nom_region": "Région", "salaire_moyen": "Salaire Moyen (€)"},
+        )
+        fig_region_sal.update_layout(
+            showlegend=False, xaxis={"tickangle": 45}, height=400
+        )
+        st.plotly_chart(fig_region_sal, width="stretch")
+    else:
+        st.info("Pas de données régionales disponibles")
+
+st.markdown("---")
+
+# --- ROW 3: COMPÉTENCES ---
+st.subheader("🔧 Analyse des compétences techniques")
+
+# Traitement des compétences
+df_clean_skills = df_clean[df_clean["hard_skills"].notna()].copy()
+
+if len(df_clean_skills) > 0:
+    all_skills = (
+        df_clean_skills["hard_skills"]
+        .str.split(",")
+        .explode()
+        .str.strip()
+        .str.capitalize()
+    )
+    all_skills = all_skills[all_skills != ""]
+
+    top_skills = all_skills.value_counts().head(5).reset_index()
+    top_skills.columns = ["Compétence", "Nombre d'offres"]
+
+    col_table, col_sunburst = st.columns([1, 2])
+
+    with col_table:
+        st.markdown("**Top 5 des compétences**")
+        st.dataframe(top_skills, width="stretch", hide_index=True)
+
+    with col_sunburst:
+        # Préparation des données pour le sunburst
+        df_exploded = df_clean_skills.copy()
+        df_exploded["skill_list"] = df_exploded["hard_skills"].str.split(",")
+        df_exploded = df_exploded.explode("skill_list")
+        df_exploded["skill_list"] = (
+            df_exploded["skill_list"].str.strip().str.capitalize()
+        )
+        df_exploded = df_exploded[df_exploded["skill_list"].notna()]
+        df_exploded = df_exploded[df_exploded["skill_list"] != ""]
+
+        # Top 7 compétences
+        top_7_skills = df_exploded["skill_list"].value_counts().nlargest(7).index
+        sunburst_data = (
+            df_exploded[df_exploded["skill_list"].isin(top_7_skills)]
+            .groupby(["titre_standardise", "skill_list"])
+            .size()
+            .reset_index(name="Nombre d'offres")
+        )
+
+        # Graphique Sunburst
+        if len(sunburst_data) > 0:
+            fig_sunburst = px.sunburst(
+                sunburst_data,
+                path=["titre_standardise", "skill_list"],
+                values="Nombre d'offres",
+                color="titre_standardise",
+                title="Compétences par métier (Top 7)",
+            )
+            fig_sunburst.update_layout(height=500)
+            st.plotly_chart(fig_sunburst, width="stretch")
+        else:
+            st.info("Pas assez de données pour générer le graphique sunburst")
+else:
+    st.info("Aucune donnée de compétences disponible")
+
+st.markdown("---")
+
+# --- FOOTER ---
+st.markdown(
+    "<p style='text-align: center; color: #718096; margin-top: 2rem;'>Date de dernière mise à jour : Données en temps réel</p>",
+    unsafe_allow_html=True,
+)
+
+st.markdown(
+    "<div style='text-align: center; color: #718096; font-size: 0.9rem; margin-top: 1rem;'>"
+    "Powered by <strong>MotherDuck</strong> × <strong>Sentence Transformers</strong> × <strong>UMAP</strong> × <strong>HDBSCAN</strong> | RUCHE Team © 2026"
+    "</div>",
+    unsafe_allow_html=True,
+)
