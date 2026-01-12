@@ -34,7 +34,6 @@ scrapers/jobteaser/archives/
 Thumbs.db
 .dependancy_ProjetNLP
 __pycache__/
-dump/
 config/
 etl/job_offers_cleaned.xlsx
 etl/job_offers_raw.xlsx
