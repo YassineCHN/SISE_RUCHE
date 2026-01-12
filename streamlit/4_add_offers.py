@@ -297,7 +297,7 @@ def detect_duplicate_streamlit(
     title: str,
     description: str,
     threshold: float = 0.85,
-    max_candidates: int = 200,
+    max_candidates: int = 500,
 ):
     """
     Détection légère de doublons pour une insertion Streamlit.
