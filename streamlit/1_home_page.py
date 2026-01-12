@@ -17,27 +17,26 @@ st.markdown(
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
     html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
-    
+    :root {
+    --background-color-secondary: var(--secondary-background-color);
+    }
     /* Header épuré */
     .search-header {
-        background: #f5f7fa;
+        background: var(--background-color-secondary, #1f1f1f);
         padding: 4rem 2rem;
         border-radius: 16px;
         margin-bottom: 2rem;
         text-align: center;
     }
-    .search-header h1 { 
-        color: #5a67d8;
+    .search-header h1 {
+        color: var(--text-color);
         font-size: 3rem;
-        font-weight: 600;
-        margin: 0 0 1rem 0;
-        letter-spacing: -0.5px;
+        font-weight: 700;
+        margin-bottom: 1rem;
     }
     .search-header p {
-        color: #4a5568;
+        color: rgba(255, 255, 255, 0.75);
         font-size: 1.1rem;
-        margin: 0;
-        font-weight: 400;
         max-width: 700px;
         margin: 0 auto;
         line-height: 1.6;
@@ -49,13 +48,14 @@ st.markdown(
         margin: 2rem auto 1.5rem auto;
     }
     .stTextInput > div > div > input {
-        border: 3px solid #f6ad55 !important;
+        background: var(--background-color-secondary, #1f1f1f) !important;
+        color: var(--text-color) !important;
+        border: 3px solid var(--primary-color) !important;
         border-radius: 50px !important;
         padding: 1.3rem 2rem !important;
         font-size: 1.05rem !important;
         transition: all 0.3s ease !important;
-        box-shadow: 0 4px 12px rgba(246, 173, 85, 0.2) !important;
-        background: white !important;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4) !important;
     }
     .stTextInput > div > div > input:focus {
         border-color: #ed8936 !important;

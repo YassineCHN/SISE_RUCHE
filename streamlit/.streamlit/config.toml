@@ -1,17 +1,29 @@
 [theme]
 base = "dark"
-primaryColor = "#eb0000cc"
-backgroundColor = "#ffd45d46"
-secondaryBackgroundColor = "#eca815ff"
-textColor = "#1d0d3a8e"
+
+# Accent principal (boutons, sliders, progress bars)
+primaryColor = "#f4b400"          # jaune miel vif
+
+# Fond principal de l'application
+backgroundColor = "#f8ae02"       # jaune chaud / ambre clair
+
+# Sidebar + containers
+secondaryBackgroundColor = "#1f1f1f"  # noir charbon
+
+# Texte par défaut
+textColor = "#f5f5f5"             # texte clair
+
+# Typographie
 font = "sans serif"
-baseRadius="1rem"
-buttonRadius="3rem"
-borderColor="#0000008e"
-# showWidgetBorder = 
-# showSidebarBorder =
+
+# Arrondis (look moderne)
+baseRadius = "1.1rem"
+buttonRadius = "2.8rem"
+
+# Bordures discrètes
+borderColor = "#00000055"
 
 
 [server]
-runOnSave= true
+runOnSave = true
 enableStaticServing = true

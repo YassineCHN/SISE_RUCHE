@@ -106,8 +106,10 @@ LOGO_PATH = CURRENT_DIR / "static" / "Logo3.png"
 
 st.markdown("## 🧠 Assistance IA (optionnelle)")
 with st.sidebar:
-    st.sidebar.markdown("# 🐝 RUCHE")
-    st.image(str(LOGO_PATH), width=140)
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        st.markdown("# 🐝 RUCHE")
+        st.image(str(LOGO_PATH), width=140)
 
     st.markdown("## 🆕 Ajout d’une offre")
     st.caption(
