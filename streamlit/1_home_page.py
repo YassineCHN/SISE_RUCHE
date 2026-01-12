@@ -6,6 +6,8 @@ import numpy as np
 import html
 import os
 from dotenv import load_dotenv, find_dotenv
+from pathlib import Path
+
 
 load_dotenv(find_dotenv())
 
@@ -107,8 +109,10 @@ st.markdown(
 """,
     unsafe_allow_html=True,
 )
+CURRENT_DIR = Path(__file__).resolve().parent
+LOGO_PATH = CURRENT_DIR / "static" / "Logo3.png"
 
-st.sidebar.image("./static/Logo3.png", width=150)
+st.sidebar.image(str(LOGO_PATH), width=150)
 st.sidebar.markdown("# Filtres")
 
 st.markdown(

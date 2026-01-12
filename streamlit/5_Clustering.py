@@ -8,6 +8,7 @@ import hdbscan
 from sentence_transformers import SentenceTransformer
 from config import EMBEDDING_MODEL, UMAP_PARAMS, HDBSCAN_PARAMS
 from collections import Counter
+from pathlib import Path
 from dotenv import load_dotenv
 from ruche.db import get_connection
 
@@ -39,8 +40,10 @@ st.markdown("---")
 # ----------------------
 # SIDEBAR : FILTRES
 # ----------------------
+CURRENT_DIR = Path(__file__).resolve().parent
+LOGO_PATH = CURRENT_DIR / "static" / "Logo3.png"
 
-st.sidebar.image("./static/Logo3.png", width=150)
+st.sidebar.image(str(LOGO_PATH), width=150)
 st.sidebar.markdown("## 🔍 Filtres")
 
 limit = st.sidebar.slider(

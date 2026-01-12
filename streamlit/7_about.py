@@ -10,12 +10,14 @@ st.set_page_config(layout="wide", page_title="À propos de RUCHE", page_icon="�
 # ============================================================
 # CHEMINS ROBUSTES (indépendants du dossier où tu lances streamlit)
 # ============================================================
-CURRENT_DIR = Path(__file__).resolve().parent          # ex: streamlit_app/
-PROJECT_ROOT = CURRENT_DIR.parent                      # racine du repo
+CURRENT_DIR = Path(__file__).resolve().parent  # ex: streamlit_app/
+PROJECT_ROOT = CURRENT_DIR.parent  # racine du repo
 
 LOGO_PATH = CURRENT_DIR / "static" / "Logo3.png"
 ARCHI_PATH = CURRENT_DIR / "static" / "architecture.png"
-PDF_PATH = PROJECT_ROOT / "documentation" / "SISE NLP_Text Mining_Rapport_Groupe6_RUCHE.pdf"
+PDF_PATH = (
+    PROJECT_ROOT / "documentation" / "SISE NLP_Text Mining_Rapport_Groupe6_RUCHE.pdf"
+)
 
 # ============================================================
 # TITRE
@@ -27,7 +29,7 @@ st.markdown(
         RUCHE — Réseau Unifié pour la Recherche d’Emploi (Data & IA)
     </p>
     """,
-    unsafe_allow_html=True
+    unsafe_allow_html=True,
 )
 
 st.markdown("<br>", unsafe_allow_html=True)
@@ -49,11 +51,15 @@ with col1:
             fiable et analytique du marché de l’emploi.
         </p>
         """,
-        unsafe_allow_html=True
+        unsafe_allow_html=True,
     )
 
     if LOGO_PATH.exists():
-        left.image(str(LOGO_PATH), width=330, caption="RUCHE — Plateforme d’analyse du marché de l’emploi en Data & IA")
+        left.image(
+            str(LOGO_PATH),
+            width=330,
+            caption="RUCHE — Plateforme d’analyse du marché de l’emploi en Data & IA",
+        )
     else:
         left.warning(f"Logo introuvable : {LOGO_PATH}")
 
@@ -74,11 +80,15 @@ with col2:
             et extraction assistée par modèles de langage.
         </p>
         """,
-        unsafe_allow_html=True
+        unsafe_allow_html=True,
     )
 
     if ARCHI_PATH.exists():
-        right.image(str(ARCHI_PATH), use_container_width=True, caption="Architecture globale du système RUCHE")
+        right.image(
+            str(ARCHI_PATH),
+            use_container_width=True,
+            caption="Architecture globale du système RUCHE",
+        )
     else:
         right.warning(f"Image architecture introuvable : {ARCHI_PATH}")
 
@@ -124,7 +134,7 @@ st.markdown(
         Rapport académique (Text Mining & NLP) — Projet RUCHE
     </p>
     """,
-    unsafe_allow_html=True
+    unsafe_allow_html=True,
 )
 
 if not PDF_PATH.exists():
@@ -163,5 +173,5 @@ st.markdown(
         RUCHE Team © 2026
     </div>
     """,
-    unsafe_allow_html=True
+    unsafe_allow_html=True,
 )

@@ -7,6 +7,7 @@ from collections import Counter
 import os
 from dotenv import load_dotenv
 from ruche.db import get_connection
+from pathlib import Path
 
 # ------------------------
 # CONNECTION DB
@@ -16,7 +17,10 @@ con = get_connection()
 st.set_page_config(
     layout="wide", page_title="Co-occurence de compétences", page_icon=":spider_web:"
 )
-st.sidebar.image("./static/Logo3.png", width=150)
+CURRENT_DIR = Path(__file__).resolve().parent
+LOGO_PATH = CURRENT_DIR / "static" / "Logo3.png"
+
+st.sidebar.image(str(LOGO_PATH), width=150)
 st.markdown(
     """
 <style>

@@ -13,10 +13,14 @@ from collections import Counter
 import sys
 import os
 from dotenv import load_dotenv
+from pathlib import Path
 
 
 st.set_page_config(page_title="Cartographie", page_icon="🗺️", layout="wide")
-st.sidebar.image("./static/Logo3.png", width=150)
+CURRENT_DIR = Path(__file__).resolve().parent
+LOGO_PATH = CURRENT_DIR / "static" / "Logo3.png"
+
+st.sidebar.image(str(LOGO_PATH), width=150)
 st.markdown(
     """
 <style>

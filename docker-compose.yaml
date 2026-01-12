@@ -1,0 +1,15 @@
+version: "3.9"
+
+services:
+  streamlit:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.streamlit
+    container_name: ruche-streamlit
+    ports:
+      - "8501:8501"
+    volumes:
+      # DuckDB local monté dans le conteneur
+      - ./data:/data
+    env_file:
+      - .env
