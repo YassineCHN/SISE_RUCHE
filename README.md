@@ -85,8 +85,8 @@ Le projet RUCHE s’inscrit dans le cadre du module **NLP & Text Mining** du Mas
 
 ```
 ┌───────────────┐    ┌────────────────────┐    ┌──────────────────────┐    ┌──────────────────────────┐    ┌──────────────────────┐
-│  Web Scraping │ →  │      MongoDB       │ →  │  ETL & Normalisation │ →  │        MotherDuck        │ →  │        Streamlit      │
-│ APIs/Crawlers │    │ BDD NSql  (JSON)   │    │ Nettoyage & Enrich.  │    │ Data Warehouse étoile   │    │ Recherche & Analyses  │
+│  Web Scraping │ →  │      MongoDB       │ →  │  ETL & Normalisation │ →  │        MotherDuck        │ →  │        Streamlit     │
+│ APIs/Crawlers │    │ BDD NSql  (JSON)   │    │ Nettoyage & Enrich.  │    │ Data Warehouse étoile    │    │ Recherche & Analyses │
 └───────────────┘    └────────────────────┘    └──────────────────────┘    └──────────────────────────┘    └──────────────────────┘
 ```
 
