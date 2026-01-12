@@ -41,3 +41,19 @@ def get_connection(read_only=False):
         db_path = project_root / "data" / "local.duckdb"
 
     return duckdb.connect(str(db_path), read_only=read_only)
+
+
+def get_mongo_uri():
+    conn_mode = os.getenv("CONNEXION_MODE", "offline")
+
+    if conn_mode == "online":
+        mongo_uri = os.getenv("MONGO_URI")
+        if not mongo_uri:
+            raise ValueError("MONGO_URI must be set when CONNEXION_MODE=online")
+        return mongo_uri
+
+    # offline
+    if os.getenv("RUNNING_IN_DOCKER") == "1":
+        return "mongodb://mongo:27017"
+    else:
+        return "mongodb://localhost:27017"

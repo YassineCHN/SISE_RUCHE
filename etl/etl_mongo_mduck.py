@@ -64,7 +64,7 @@ import sys
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
-from ruche.db import get_connection
+from ruche.db import get_connection, get_mongo_uri
 
 # Configuration
 warnings.filterwarnings("ignore")
@@ -73,17 +73,9 @@ load_dotenv()
 # ============================================================================
 # GLOBAL CONFIGURATION
 # ============================================================================
+mongo_uri = get_mongo_uri()
+DATABASE_NAME = os.getenv("MONGO_DATABASE", "RUCHE_datalake")
 
-# MongoDB Configuration
-ENV = os.getenv("ENV", "dev")
-if ENV == "dev":
-    MONGO_URI = "mongodb://localhost:27017"
-else:
-    MONGO_URI = os.getenv("MONGO_URI")
-DATABASE_NAME = "RUCHE_datalake"
-
-# Configuration MotherDuck
-MOTHERDUCK_TOKEN = os.getenv("MOTHERDUCK_TOKEN")
 
 # Collections to process
 COLLECTIONS = ["apec_raw", "francetravail_raw", "servicepublic_raw", "jobteaser_raw"]
@@ -229,9 +221,7 @@ COMPLETE_REGION_MAPPING = {
 # ============================================================================
 
 
-def connect_mongodb(
-    uri: str = MONGO_URI, db_name: str = DATABASE_NAME
-) -> pymongo.database.Database:
+def connect_mongodb(uri: str, db_name: str) -> pymongo.database.Database:
     """Establish connection to MongoDB Atlas"""
     try:
         client = MongoClient(uri, serverSelectionTimeoutMS=5000)
@@ -268,7 +258,7 @@ def extract_all_collections(limit: Optional[int] = LIMIT) -> Dict[str, List[Dict
     print("PHASE 1: MONGODB EXTRACTION")
     print("=" * 80)
 
-    db = connect_mongodb()
+    db = connect_mongodb(mongo_uri, DATABASE_NAME)
 
     all_data = {}
     for collection_name in COLLECTIONS:
