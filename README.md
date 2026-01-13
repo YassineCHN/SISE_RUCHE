@@ -217,22 +217,66 @@ RUCHE/
 ```
 --- 
 
-## 🚀 Lancer l’application
+## ⚙️ Installation & Lancement (Streamlit)
 
-1. **Installer les dépendances:**
+---
+
+### 📋 Prérequis
+
+- Docker ≥ 20.x
+- Docker Compose
+- Accès au dépôt du projet (Git ou Drive)
+
+---
+
+### 📥 Récupération du projet
+
+Cloner le dépôt GitHub :
+
 ```bash
-pip install -r requirements_mongodo_ftscraper.txt
+git clone https://github.com/RomainBuono/RUCHE.git
+cd RUCHE
 ```
 
-2. **Configurer `.env` file:**
-```env
-export MOTHERDUCK_TOKEN=...
-export MISTRAL_API_KEY=...
+---
+
+### 📁 Arborescence requise
+
+Pour que l’application fonctionne correctement, les dossiers suivants doivent être présents :
+
+```text
+RUCHE/
+├── data/                     # Base DuckDB (.duckdb)
+├── streamlit/                # Application Streamlit
+├── etl/                      # Fonctions ETL utilisées dans l’app
+├── documentation/            # Rapport PDF chargé dans l’application
+├── docker/
+│   └── Dockerfile.streamlit  # Dockerfile de l’app Streamlit
+├── ruche/                    # Méthodes de connexion à la base
+├── requirements_streamlit.txt
+├── docker-compose.yml
+└── .env                      # Variables d’environnement (à créer)
+```
+⚠️ Le fichier .env doit être placé à la racine du projet, au même niveau que docker-compose.yml.
+⚠️ Injecter les variables d’environnement via un fichier `.env`
+
+### 🐳 Build de l’image Streamlit
+
+Depuis la racine du projet :
+```bash
+docker build -f docker/Dockerfile.streamlit -t ruche-streamlit .
 ```
 
-3. **Lancer Streamlit**
+### ▶️ Lancement de l’application
 ```bash
-streamlit run app.py
+docker compose up
+```
+L’application est ensuite accessible à l’adresse :
+-> http://localhost:8501
+
+Pour l' arrêt de l'application :
+```bash
+docker compose down
 ```
 
 --- 
