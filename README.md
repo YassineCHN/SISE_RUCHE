@@ -375,11 +375,14 @@ L’application est accessible à l’adresse :
 
 ## 📚 Ressources associées
 
+- 🎥 **Vidéo d'installation** : **[📺 Installation Demo Video](https://youtu.be/PWfyqenFNrk)**
+- 🎥 **Vidéo de démonstration** : **[📺 Demonstration Video](https://youtu.be/gIqiBeyKKjI)**
 - 📄 **Rapport académique (PDF)**  : [Projet NLP & Text Mining – Rapport RUCHE (Groupe 6)](/documentation/SISE%20NLP_Text%20Mining_Rapport_Groupe6_RUCHE.pdf)
 - 📘 **Notice technique – Filtrage ML Data / Non-Data**  : [TF-IDF & Régression logistique](documentation/notice_TFIDF_ML_filtre_data_nondata.md)
 - 📘 **Notice technique – Scraper France Travail**  : [API & Web Scraping France Travail](documentation/notice_france_travail_scraper.md)
 - 📘 **Notice technique – Moteur de recherche sémantique**  : [Recherche vectorielle & similarité cosinus](documentation/notice_moteur_recherche_semantique.md)
 - 📚 **API-Référentiel géographique français** : [API Géolocalisation](https://data.enseignementsup-recherche.gouv.fr/explore/dataset/fr-esr-referentiel-geographique/api/)
+
 
 
 
