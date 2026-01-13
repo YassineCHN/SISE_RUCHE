@@ -13,4 +13,5 @@ certifi>=2023.11.17
 # Environment variables
 python-dotenv>=1.0.0
 
-
+# Anti-bot detection for Selenium
+undetected-chromedriver>=3.5.5
