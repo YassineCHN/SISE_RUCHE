@@ -280,6 +280,7 @@ docker compose down
 
 ⚠️ Cette méthode est fournie à titre indicatif.  
 L’installation via **Docker Compose** reste la méthode recommandée pour garantir la reproductibilité de l’environnement.
+
 ---
 
 ### 📥 Récupération du projet
