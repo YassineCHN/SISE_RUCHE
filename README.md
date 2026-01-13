@@ -276,8 +276,49 @@ Pour l' arrêt de l'application :
 ```bash
 docker compose down
 ```
+## ⚙️ Installation alternative (sans Docker)
 
+⚠️ Cette méthode est fournie à titre indicatif.  
+L’installation via **Docker Compose** reste la méthode recommandée pour garantir la reproductibilité de l’environnement.
+---
+
+### 📥 Récupération du projet
+```bash
+git clone https://github.com/RomainBuono/RUCHE.git
+cd RUCHE
+```
+
+### 🐍 Environnement Python
+Créer et activer un environnement virtuel (Python 3.13 recommandé) :
+
+```bash
+python3.13 -m venv venv
+source venv/bin/activate        # Linux / macOS
+# venv\Scripts\activate         # Windows
+```
+
+### 📦 Installation des dépendances
+Installer les dépendances nécessaires à l’application Streamlit :
+```bash
+pip install -r requirements_streamlit.txt
+```
+
+### 🔐 Variables d’environnement
+Définir les variable d’environnements : 
+```bash
+MOTHERDUCK_TOKEN = ...
+MISTRAL_API_KEY = ...
+```
+- ⚠️ Le fichier .env doit être placé à la racine du projet, au même niveau que docker-compose.yml.
+- ⚠️ Injecter les variables d’environnement via un fichier `.env`
+
+### ▶️ Lancement de l’application
+Lancer l’application Streamlit :
+```bash
+streamlit run streamlit/app.py
+```
 --- 
+
 ## 📚 Ressources associées
 
 - 📄 **Rapport académique (PDF)**  : [Projet NLP & Text Mining – Rapport RUCHE (Groupe 6)](/documentation/SISE%20NLP_Text%20Mining_Rapport_Groupe6_RUCHE.pdf)
