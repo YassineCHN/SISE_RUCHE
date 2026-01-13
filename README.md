@@ -314,7 +314,7 @@ conda activate ruche
 ```
 **Avec `uv`**
 ```bash
-uv venv
+uv venv --python 3.12
 source .venv/bin/activate
 ```
 ---
@@ -335,7 +335,6 @@ Créer un fichier `.env` à la racine du projet contenant les variables suivante
 ```env
 # ---------- Connexion MongoDB distante
 MONGO_URI=
-APP_NAME=
 MONGO_DATABASE=RUCHE_datalake
 MISTRAL_API_KEY=
 
