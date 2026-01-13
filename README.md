@@ -227,8 +227,6 @@ RUCHE/
 - Docker Compose
 - Accès au dépôt du projet (Git ou Drive)
 
----
-
 ### 📥 Récupération du projet
 
 Cloner le dépôt GitHub :
@@ -257,8 +255,8 @@ RUCHE/
 ├── docker-compose.yml
 └── .env                      # Variables d’environnement (à créer)
 ```
-⚠️ Le fichier .env doit être placé à la racine du projet, au même niveau que docker-compose.yml.
-⚠️ Injecter les variables d’environnement via un fichier `.env`
+- ⚠️ Le fichier .env doit être placé à la racine du projet, au même niveau que docker-compose.yml.
+- ⚠️ Injecter les variables d’environnement via un fichier `.env`
 
 ### 🐳 Build de l’image Streamlit
 
