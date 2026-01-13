@@ -276,48 +276,102 @@ Pour l' arrêt de l'application :
 ```bash
 docker compose down
 ```
-## ⚙️ Installation alternative (sans Docker)
+## ⚙️ Installation alternative (sans Docker) — recommandée pour les performances
 
-⚠️ Cette méthode est fournie à titre indicatif.  
-L’installation via **Docker Compose** reste la méthode recommandée pour garantir la reproductibilité de l’environnement.
+Cette méthode correspond à une installation **locale ou avec connexions distantes**  
+et constitue **l’alternative la plus rapide** à l’exécution via Docker.
+
+L’installation via **Docker Compose** reste pertinente pour la reproductibilité,
+mais peut entraîner des temps de chargement plus élevés pour l’application Streamlit.
 
 ---
 
 ### 📥 Récupération du projet
+
+Cloner le dépôt GitHub :
+
 ```bash
 git clone https://github.com/RomainBuono/RUCHE.git
 cd RUCHE
 ```
-
+---
 ### 🐍 Environnement Python
-Créer et activer un environnement virtuel (Python 3.13 recommandé) :
 
+⚠️ Python **3.12** est requis (Python 3.13 non supporté).
+
+Créer et activer un environnement virtuel (au choix) :
+
+**Avec `venv`**
 ```bash
-python3.13 -m venv venv
+python3.12 -m venv venv
 source venv/bin/activate        # Linux / macOS
 # venv\Scripts\activate         # Windows
 ```
-
+**Avec `conda`**
+```bash
+conda create -n ruche python=3.12
+conda activate ruche
+```
+**Avec `uv`**
+```bash
+uv venv
+source .venv/bin/activate
+```
+---
 ### 📦 Installation des dépendances
 Installer les dépendances nécessaires à l’application Streamlit :
 ```bash
-pip install -r requirements_streamlit.txt
+pip install -r requirements.txt
 ```
-
+---
 ### 🔐 Variables d’environnement
-Définir les variable d’environnements : 
-```bash
-MOTHERDUCK_TOKEN = ...
-MISTRAL_API_KEY = ...
-```
-- ⚠️ Le fichier .env doit être placé à la racine du projet, au même niveau que docker-compose.yml.
-- ⚠️ Injecter les variables d’environnement via un fichier `.env`
 
+Créer un fichier `.env` à la racine du projet contenant les variables suivantes 
+```bash
+### 🔐 Variables d’environnement
+
+Créer un fichier `.env` à la racine du projet contenant les variables suivantes :
+
+```env
+# ---------- Connexion MongoDB distante
+MONGO_URI=
+APP_NAME=
+MONGO_DATABASE=RUCHE_datalake
+MISTRAL_API_KEY=
+
+# ---------- Connexion DuckDB / MotherDuck
+MOTHERDUCK_TOKEN=
+MOTHERDUCK_DB=job_market_RUCHE   # La base doit exister dans MotherDuck (même vide)
+
+# ---------- Connexion locale
+DUCKDB_PATH=/data/local.duckdb
+
+# ---------- Mode de connexion
+# Valeurs possibles : offline (DuckDB) | online (MotherDuck)
+CONNEXION_MODE=offline
+```
+⚠️ Le fichier `.env` **ne doit pas être versionné**.
+
+---
+### 🔄 Modes de connexion
+
+L’application supporte deux modes de connexion, pilotés par la variable `CONNEXION_MODE` :
+
+- **offline** : utilisation d’une base DuckDB locale  
+- **online** : connexion à une base MotherDuck distante  
+
+Le comportement de l’application Streamlit s’adapte automatiquement au mode sélectionné.
+
+---
 ### ▶️ Lancement de l’application
 Lancer l’application Streamlit :
 ```bash
-streamlit run streamlit/app.py
+cd streamlit
+streamlit run app.py
 ```
+L’application est accessible à l’adresse :
+👉 http://localhost:8501
+
 --- 
 
 ## 📚 Ressources associées
