@@ -572,6 +572,7 @@ with st.form("add_offer_form", enter_to_submit=False):
             "Hard skills",
             options=hard_options,
             default=hard_default,
+            accept_new_options=True,
         )
     with col2:
         llm_soft = llm_offer.get("soft_skills")
@@ -584,6 +585,7 @@ with st.form("add_offer_form", enter_to_submit=False):
             "Soft skills",
             options=soft_options,
             default=soft_default,
+            accept_new_options=True,
         )
     with col3:
         langages = st.multiselect(
