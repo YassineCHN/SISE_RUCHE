@@ -165,6 +165,17 @@ RUCHE/
 │   ├── backup_job_market.duckdb
 │   └── local.duckdb
 │
+├── docker/
+│   └── Dockerfile.streamlit
+│
+├── dump/
+│   ├── RUCHE_datalake/ # Backup pour utiliser version local
+│   └── prelude.json
+│
+├── ruche/
+│    ├── __init__.py
+│    └── db.py
+│
 ├── scraping/    # Scripts de collecte des offres d’emploi
 │   ├── francetravail/
 │   ├── apec/
@@ -207,11 +218,13 @@ RUCHE/
 │   ├── notice_TFIDF_ML_filtre_data_nondata.md
 │   └── notice_moteur_recherche_semantique.md
 │
-├── duck_to_mother.py    # Migration DuckDB local → MotherDuck
+├── .gitignore
+├── .python-version
 ├── pyproject.toml       # Configuration du projet Python
 ├── requirements.txt
-├── test_connexion_duckdb.py
-├── test_creation_duckdb.py
+├── requirements_streamlit.txt # Requirements seulement pour l'app streamlit
+├── .env.example # Exemple de .env
+├── docker-compose.yaml
 └── README.md
 
 ```
