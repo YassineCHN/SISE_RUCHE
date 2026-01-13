@@ -216,7 +216,6 @@ RUCHE/
 │   ├── 7_about.py
 │   ├── app.py
 │   └── config.py
-
 │
 ├── .env.example # Exemple de .env 
 ├── .gitignore
