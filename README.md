@@ -162,70 +162,69 @@ Application **multi-pages** :
 ```
 RUCHE/
 ├── data/        # Bases DuckDB locales (backup et environnement de travail)
-│   ├── backup_job_market.duckdb
 │   └── local.duckdb
 │
 ├── docker/
 │   └── Dockerfile.streamlit
 │
-├── dump/
-│   ├── RUCHE_datalake/ # Backup pour utiliser version local
+├── documentation/      # Documentation et notices techniques
+│   ├── notice_france_travail_scraper.md
+│   ├── notice_moteur_recherche_semantique.md
+│   ├── notice_TFIDF_ML_filtre_data_nondata.md
+│   ├── Rapport.md 
+│   ├── SISE NLP_Text Mining_Rapport_Groupe6_RUCHE.pdf
+│   └── SISE NLP_Text Mining_Rapport_Groupe6_RUCHE.tex
+│
+├── dump/ # Stockage local des collections de la base NoSQL
+│   ├── RUCHE_datalake/
 │   └── prelude.json
-│
-├── ruche/
-│    ├── __init__.py
-│    └── db.py
-│
-├── scraping/    # Scripts de collecte des offres d’emploi
-│   ├── francetravail/
-│   ├── apec/
-│   ├── jobteaser/
-│   └── service_public/
-│
-├── mongodb/    # Alimentation et gestion du BDD NoSql MongoDB
-│   ├── main_mongo.py
-│   ├── reference_apec.py
-│   ├── mongodb_load_jobteaser.py
-│   └── mongodb_utils.py
 │
 ├── etl/        # Pipeline ETL et traitements analytiques
 │   ├── cleanX.py  # Fonctions de nettoyage et normalisation des données
 │   ├── config_etl.py
+│   ├── etl_mongo_mduck.py # Lancement principal d'ETL
 │   ├── etl_utils.py
 │   ├── etl_vectorization.py
-│   ├── tfidf_ml_data_filter.py  # Filtrage ML Data / Non-Data (TF-IDF + Logistic Regression)
 │   ├── geolocation_enrichment.py # Enrichissement géographique (latitude / longitude via API)
-│   └── etl_motherduck.py
+│   └── tfidf_ml_data_filter.py  # Filtrage ML Data / Non-Data (TF-IDF + Logistic Regression)
 │
-├── streamlit_app/   # Application web interactive Streamlit
+├── mongodb/    # Alimentation et gestion de BDD NoSql MongoDB à partir de JSON du scrapping
+│   ├── main_mongo.py
+│   ├── mongodb_load_jobteaser.py
+│   ├── mongodb_utils.py
+│   └── reference_apec.py
+│
+├── ruche/
+│    ├── __init__.py
+│    └── db.py # Fonctions de connexion centralisé aux bases
+│
+├── scrapers/    # Scripts de collecte des offres d’emploi
+│   ├── apec/
+│   ├── francetravail/
+│   ├── jobteaser/
+│   └── service_public/
+│
+├── streamlit/   # Application web interactive Streamlit
+│   ├── static/   # Ressources statiques (logos, images)
+│   ├── .streamlit/ # contient le fichier config.toml pour le style de l'application
 │   ├── 1_home_page.py
 │   ├── 2_cartographie.py
 │   ├── 3_visualisation.py
 │   ├── 4_add_offers.py
 │   ├── 5_clustering.py
 │   ├── 6_graphe_competences.py
-│   ├── 7_llm.py
-│   ├── 8_about.py
+│   ├── 7_about.py
 │   ├── app.py
-│   ├── config.py
-│   ├── static/   # Ressources statiques (logos, images)
-│   ├── db/       # Accès local aux bases pour l’app
-│   └── analyse_competences/ # Analyses spécifiques liées aux compétences
+│   └── config.py
 │
-├── docs/      # Documentation et notices techniques
-│   ├── Rapport.md
-│   ├── notice_france_travail_scraper.md
-│   ├── notice_TFIDF_ML_filtre_data_nondata.md
-│   └── notice_moteur_recherche_semantique.md
-│
+├── .env.example # Exemple de .env 
 ├── .gitignore
-├── .python-version
-├── pyproject.toml       # Configuration du projet Python
-├── requirements.txt
-├── requirements_streamlit.txt # Requirements seulement pour l'app streamlit
-├── .env.example # Exemple de .env
+├── .python-version # UV
 ├── docker-compose.yaml
-└── README.md
+├── pyproject.toml #UV       
+├── README.md 
+├── requirements_streamlit.txt # Requirements allegé pour Docker
+└── requirements.txt 
 
 ```
 --- 
